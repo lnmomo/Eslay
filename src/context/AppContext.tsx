@@ -130,6 +130,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         setState((current) => ({
           ...current,
           ...saved,
+          session: {
+            ...(saved.session ?? current.session),
+            isAuthenticated: false,
+          },
           destinations: saved.destinations ?? mockDestinations,
           savedFolders: saved.savedFolders ?? mockSavedFolders,
         }));

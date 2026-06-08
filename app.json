@@ -14,6 +14,12 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F3E7D3"
+      },
+      "package": "com.lnmo.eslaytravelapp"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "5ff4a3d1-db89-47f7-bb03-f7d0cfeb206e"
       }
     }
   }

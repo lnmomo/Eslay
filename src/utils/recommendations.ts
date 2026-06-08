@@ -7,6 +7,17 @@ type RecommendationProfile = {
 
 const priceToLevel = (priceLevel: string) => Math.max(1, Math.min(priceLevel.length, 5));
 
+const budgetScore = (destination: Destination, budgetLevel: RecommendationProfile["budgetLevel"]) => {
+  const priceLevel = priceToLevel(destination.priceLevel);
+  const distance = Math.abs(priceLevel - budgetLevel);
+  const fitBoost = Math.max(0, 7 - distance * 2.2);
+  const tooExpensivePenalty = priceLevel > budgetLevel ? (priceLevel - budgetLevel) * -4 : 0;
+  const underBudgetPenalty = budgetLevel >= 4 && priceLevel <= 1 ? -3 : 0;
+  const premiumBoost = budgetLevel >= 4 && priceLevel >= 3 ? 3.5 : 0;
+  const valueBoost = budgetLevel <= 2 && priceLevel <= 2 ? 2.5 : 0;
+  return fitBoost + tooExpensivePenalty + underBudgetPenalty + premiumBoost + valueBoost;
+};
+
 const dietaryScore = (destination: Destination, dietaryMode: RecommendationProfile["dietaryMode"]) => {
   if (dietaryMode === "None") {
     return 0;
@@ -47,10 +58,9 @@ export const scoreDestination = (
   const tagScore = destination.tags.reduce((acc, tag) => acc + (selectedTags.includes(tag) ? weights[tag] * 3 : weights[tag]), 0);
   const savedBoost = savedIds.includes(destination.id) ? 6 : 0;
   const ratingBoost = destination.rating * 2;
-  const budgetBoost = profile ? Math.max(0, 4 - Math.abs(priceToLevel(destination.priceLevel) - profile.budgetLevel) * 1.4) : 0;
-  const budgetPenalty = profile && priceToLevel(destination.priceLevel) > profile.budgetLevel + 1 ? -3 : 0;
+  const budgetBoost = profile ? budgetScore(destination, profile.budgetLevel) : 0;
   const dietaryBoost = profile ? dietaryScore(destination, profile.dietaryMode) : 0;
-  return tagScore + savedBoost + ratingBoost + budgetBoost + budgetPenalty + dietaryBoost;
+  return tagScore + savedBoost + ratingBoost + budgetBoost + dietaryBoost;
 };
 
 export const sortDestinations = (
