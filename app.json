@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Eslay",
+    "slug": "eslay-travel-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F3E7D3"
+      }
+    }
+  }
+}
