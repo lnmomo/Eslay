@@ -1,21 +1,39 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import MapView, { Marker, Polyline } from "react-native-maps";
 import { Pill, Screen, SearchBar, SoftCard } from "../components/Ui";
 import { useAppContext } from "../context/AppContext";
 import { radius, spacing } from "../theme/tokens";
 import { placeLineText, placeText } from "../utils/placeNames";
 
-const positionForIndex = (index: number, total: number) => {
-  const progress = total <= 1 ? 0.5 : index / (total - 1);
-  const wave = Math.sin(progress * Math.PI * 2) * 34;
+const buildRegion = (points: Array<{ latitude: number; longitude: number }>) => {
+  if (points.length === 0) {
+    return {
+      latitude: 35.0116,
+      longitude: 135.7681,
+      latitudeDelta: 0.2,
+      longitudeDelta: 0.2,
+    };
+  }
+
+  const latitudes = points.map((point) => point.latitude);
+  const longitudes = points.map((point) => point.longitude);
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+
   return {
-    left: 34 + progress * 260,
-    top: 72 + index * 42 + wave,
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: Math.max((maxLat - minLat) * 1.7, 0.08),
+    longitudeDelta: Math.max((maxLng - minLng) * 1.7, 0.08),
   };
 };
 
 export const MapScreen = () => {
   const { state, activeTrip, destinationsById, theme } = useAppContext();
+  const mapRef = useRef<MapView | null>(null);
   const zh = state.locale === "zh";
   const stops = activeTrip.stops
     .map((stop, index) => ({
@@ -25,6 +43,14 @@ export const MapScreen = () => {
     }))
     .filter((stop) => Boolean(stop.destination));
 
+  const routeCoordinates = useMemo(
+    () =>
+      stops.map((stop) => ({
+        latitude: stop.destination.coordinates.latitude,
+        longitude: stop.destination.coordinates.longitude,
+      })),
+    [stops],
+  );
   const routeDestinationIds = useMemo(() => new Set(stops.map((stop) => stop.destinationId)), [stops]);
   const highlighted =
     (state.highlightedDestinationId && routeDestinationIds.has(state.highlightedDestinationId)
@@ -69,37 +95,71 @@ export const MapScreen = () => {
         </View>
 
         <View style={styles.mapArea}>
-          <View style={[styles.canvas, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <View style={[styles.mapAuraOne, { backgroundColor: theme.colors.accentSoft }]} />
-            <View style={[styles.mapAuraTwo, { borderColor: theme.colors.border }]} />
-            <View style={[styles.routeRail, { backgroundColor: theme.colors.accentSoft }]} />
-            {stops.map((stop, index) => {
-              const active = stop.destinationId === highlighted.id;
-              const position = positionForIndex(index, stops.length);
-              return (
-                <Pressable
-                  key={stop.id}
-                  onPress={() => state.actions.setHighlightedDestination(stop.destinationId)}
-                  style={[
-                    styles.mapNode,
-                    {
-                      left: `${Math.min(82, Math.max(8, (position.left / 360) * 100))}%`,
-                      top: Math.min(350, position.top),
-                      backgroundColor: active ? theme.colors.accent : theme.colors.badge,
-                      borderColor: active ? theme.colors.accent : theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={styles.mapNodeText}>{stop.sequence}</Text>
-                </Pressable>
-              );
-            })}
-            <View style={styles.fullscreenBadge}>
-              <Text style={styles.fullscreenBadgeText}>
-                {activeCityLabel}  {stops.length} {zh ? "\u4e2a\u666f\u70b9" : "stops"}
-              </Text>
+          {state.mapAvailable ? (
+            <View style={styles.canvas}>
+              <MapView
+                ref={mapRef}
+                style={StyleSheet.absoluteFill}
+                initialRegion={buildRegion(routeCoordinates)}
+                onMapReady={() => {
+                  if (routeCoordinates.length > 1) {
+                    mapRef.current?.fitToCoordinates?.(routeCoordinates, {
+                      edgePadding: { top: 80, right: 60, bottom: 220, left: 60 },
+                      animated: true,
+                    });
+                  }
+                }}
+              >
+                {routeCoordinates.length > 1 ? (
+                  <Polyline coordinates={routeCoordinates} strokeColor={theme.colors.accent} strokeWidth={4} />
+                ) : null}
+                {stops.map((stop) => (
+                  <Marker
+                    key={stop.id}
+                    coordinate={stop.destination.coordinates}
+                    title={`${stop.sequence}. ${placeText(state.locale, stop.destination.title)}`}
+                    description={stop.destination.address}
+                    onPress={() => state.actions.setHighlightedDestination(stop.destinationId)}
+                  >
+                    <View
+                      style={[
+                        styles.markerBubble,
+                        {
+                          backgroundColor: stop.destinationId === highlighted.id ? theme.colors.accent : theme.colors.surface,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: stop.destinationId === highlighted.id ? "#F6FDFF" : theme.colors.text, fontWeight: "900" }}>
+                        {stop.sequence}
+                      </Text>
+                    </View>
+                  </Marker>
+                ))}
+              </MapView>
+              <View style={styles.fullscreenBadge}>
+                <Text style={styles.fullscreenBadgeText}>
+                  {activeCityLabel}  {stops.length} {zh ? "\u4e2a\u666f\u70b9" : "stops"}
+                </Text>
+              </View>
             </View>
-          </View>
+          ) : (
+            <SoftCard>
+              <Text style={[styles.fallbackTitle, { color: theme.colors.text }]}>
+                {zh ? "\u5f53\u524d\u884c\u7a0b\u666f\u70b9\u5217\u8868" : "Current itinerary stop list"}
+              </Text>
+              {stops.map((stop) => (
+                <View key={stop.id} style={[styles.fallbackRow, { borderBottomColor: theme.colors.border }]}>
+                  <Text style={{ color: theme.colors.accent, fontWeight: "900" }}>{stop.sequence}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: "800" }}>{placeText(state.locale, stop.destination.title)}</Text>
+                    <Text style={{ color: theme.colors.subtext }}>{stop.destination.address}</Text>
+                  </View>
+                  <Text style={{ color: theme.colors.subtext }}>{stop.destination.etaMinutes}m</Text>
+                </View>
+              ))}
+            </SoftCard>
+          )}
         </View>
 
         <View style={styles.stopStrip}>
@@ -138,6 +198,11 @@ export const MapScreen = () => {
                 <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>{placeText(state.locale, highlighted.title)}</Text>
                 <Text style={[styles.sheetSub, { color: theme.colors.subtext }]}>{highlighted.address}</Text>
               </View>
+              <Pressable onPress={() => state.actions.toggleMapFallback()} style={[styles.failureToggle, { backgroundColor: theme.colors.accentSoft }]}>
+                <Text style={{ color: theme.colors.accent, fontWeight: "800", fontSize: 12 }}>
+                  {state.mapAvailable ? (zh ? "\u5217\u8868" : "List") : (zh ? "\u5730\u56fe" : "Map")}
+                </Text>
+              </Pressable>
             </View>
             <View style={styles.sheetStats}>
               <Pill label={zh ? `${stops.length} \u4e2a\u884c\u7a0b\u666f\u70b9` : `${stops.length} trip stops`} />
@@ -147,8 +212,8 @@ export const MapScreen = () => {
             </View>
             <Text style={[styles.sheetBody, { color: theme.colors.subtext }]}>
               {zh
-                ? "\u5b89\u5353\u9884\u89c8\u7248\u4f7f\u7528\u8f7b\u91cf\u8def\u7ebf\u56fe\uff0c\u4ec5\u5c55\u793a\u5f53\u524d\u884c\u7a0b\u57ce\u5e02\u5185\u666f\u70b9\u3002"
-                : "The Android preview uses a lightweight route map and only shows stops from the current itinerary city."}
+                ? "\u5730\u56fe\u4ec5\u5c55\u793a\u5f53\u524d\u884c\u7a0b\u7684\u57ce\u5e02\u5185\u666f\u70b9\uff0c\u4e0d\u518d\u6df7\u5165\u5176\u4ed6\u57ce\u5e02\u3002"
+                : "The map only shows in-city stops from the current itinerary, without mixing in other cities."}
             </Text>
           </SoftCard>
         </View>
@@ -185,64 +250,41 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     overflow: "hidden",
     position: "relative",
-    borderWidth: 1,
   },
-  mapAuraOne: {
-    position: "absolute",
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    right: -82,
-    top: -58,
-    opacity: 0.8,
-  },
-  mapAuraTwo: {
-    position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    borderWidth: 1,
-    left: -120,
-    bottom: -90,
-    opacity: 0.7,
-  },
-  routeRail: {
-    position: "absolute",
-    left: "18%",
-    right: "18%",
-    top: 104,
-    height: 244,
-    borderRadius: 999,
-    transform: [{ rotate: "-18deg" }],
-    opacity: 0.78,
-  },
-  mapNode: {
-    position: "absolute",
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2,
+  markerBubble: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-  },
-  mapNodeText: {
-    color: "#F6FDFF",
-    fontWeight: "900",
+    borderWidth: 2,
   },
   fullscreenBadge: {
     position: "absolute",
-    left: spacing.md,
-    bottom: spacing.md,
+    top: spacing.md,
+    right: spacing.md,
+    backgroundColor: "rgba(7, 21, 26, 0.42)",
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
-    backgroundColor: "rgba(12, 32, 38, 0.68)",
+    paddingVertical: spacing.xs,
   },
-  fullscreenBadgeText: { color: "#F6FDFF", fontWeight: "900", fontSize: 12 },
+  fullscreenBadgeText: {
+    color: "#EAF9FB",
+    fontWeight: "800",
+    fontSize: 12,
+  },
+  fallbackTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    marginBottom: spacing.sm,
+  },
+  fallbackRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    alignItems: "center",
+  },
   stopStrip: {
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
@@ -266,6 +308,7 @@ const styles = StyleSheet.create({
   sheetHeader: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start" },
   sheetTitle: { fontSize: 22, lineHeight: 26, fontWeight: "900", letterSpacing: -0.4 },
   sheetSub: { marginTop: 6, fontSize: 13, lineHeight: 19, fontWeight: "700" },
+  failureToggle: { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 10 },
   sheetStats: { marginTop: spacing.md, flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   sheetBody: { marginTop: spacing.md, fontSize: 13, lineHeight: 19, fontWeight: "700" },
 });
