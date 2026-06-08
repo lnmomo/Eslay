@@ -1,6 +1,6 @@
 import React from "react";
 import { StatusBar } from "expo-status-bar";
-import { Platform, SafeAreaView, StyleSheet, View } from "react-native";
+import { Platform, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { AppProvider, useAppContext } from "./src/context/AppContext";
 import { DiscoveryScreen } from "./src/screens/DiscoveryScreen";
 import { ItineraryScreen } from "./src/screens/ItineraryScreen";
@@ -9,6 +9,31 @@ import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { SavedScreen } from "./src/screens/SavedScreen";
 import { AppTab, TabBar } from "./src/components/TabBar";
+
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { message: string | null }> {
+  state = { message: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { message: error.message };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error(error);
+  }
+
+  render() {
+    if (this.state.message) {
+      return (
+        <View style={styles.errorScreen}>
+          <Text style={styles.errorTitle}>Eslay failed to start</Text>
+          <Text style={styles.errorBody}>{this.state.message}</Text>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 const MainApp = () => {
   const { state, theme } = useAppContext();
@@ -64,9 +89,11 @@ const MainApp = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainApp />
-    </AppProvider>
+    <AppErrorBoundary>
+      <AppProvider>
+        <MainApp />
+      </AppProvider>
+    </AppErrorBoundary>
   );
 }
 
@@ -119,5 +146,23 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  errorScreen: {
+    flex: 1,
+    backgroundColor: "#FBF7EF",
+    justifyContent: "center",
+    padding: 24,
+  },
+  errorTitle: {
+    color: "#18292D",
+    fontSize: 24,
+    fontWeight: "900",
+    marginBottom: 12,
+  },
+  errorBody: {
+    color: "#796755",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "700",
   },
 });

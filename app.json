@@ -4,6 +4,7 @@
     "slug": "eslay-travel-app",
     "version": "1.0.0",
     "orientation": "portrait",
+    "newArchEnabled": false,
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
       "**/*"
@@ -12,6 +13,7 @@
       "supportsTablet": true
     },
     "android": {
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#F3E7D3"
       },
