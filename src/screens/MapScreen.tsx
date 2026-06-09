@@ -5,6 +5,7 @@ import { Pill, Screen, SearchBar, SoftCard } from "../components/Ui";
 import { useAppContext } from "../context/AppContext";
 import { radius, spacing } from "../theme/tokens";
 import { placeLineText, placeText } from "../utils/placeNames";
+import { tripDisplayTitle } from "../utils/tripDisplay";
 
 const buildRegion = (points: Array<{ latitude: number; longitude: number }>) => {
   if (points.length === 0) {
@@ -90,7 +91,7 @@ export const MapScreen = () => {
           <Text style={styles.tripHeaderKicker}>{zh ? "\u5f53\u524d\u884c\u7a0b\u5730\u56fe" : "CURRENT TRIP MAP"}</Text>
           <Text style={styles.tripHeaderTitle}>{activeCityLabel}</Text>
           <Text style={styles.tripHeaderMeta}>
-            {placeText(state.locale, activeTrip.title)}  {stops.length} {zh ? "\u4e2a\u57ce\u5e02\u5185\u666f\u70b9" : "in-city stops"}
+            {tripDisplayTitle(state.locale, activeTrip)}  {stops.length} {zh ? "\u4e2a\u57ce\u5e02\u5185\u666f\u70b9" : "in-city stops"}
           </Text>
         </View>
 

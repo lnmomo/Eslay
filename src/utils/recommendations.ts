@@ -1,4 +1,6 @@
 import { Destination, DiscoveryFilter, PreferenceTag, RecommendationWeights } from "../types";
+import { getRealCityPois } from "../data/realCityPois";
+import { buildSearchText, normalizeSearchText } from "./searchAliases";
 
 type RecommendationProfile = {
   budgetLevel: 1 | 2 | 3 | 4 | 5;
@@ -82,13 +84,21 @@ export const filterDestinations = (
   filter: DiscoveryFilter,
 ) =>
   destinations.filter((destination) => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = normalizeSearchText(query.trim());
+    const cityPois = getRealCityPois(destination.city);
+    const searchableText = buildSearchText([
+      destination.title,
+      destination.city,
+      destination.country,
+      destination.description,
+      destination.address,
+      destination.category,
+      ...destination.tags,
+      ...cityPois.flatMap((poi) => [poi.title, poi.city, poi.address, poi.category, ...(poi.tags ?? [])]),
+    ]);
     const matchesQuery =
       normalizedQuery.length === 0 ||
-      [destination.title, destination.city, destination.country, destination.description]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedQuery);
+      normalizeSearchText(searchableText).includes(normalizedQuery);
     const normalizedTags = destination.tags.map((tag) => tag.toLowerCase());
     const filterKey = filter.toLowerCase();
     const matchesBudget = filter === "Budget" ? destination.priceLevel === "$" || destination.priceLevel === "$$" : false;

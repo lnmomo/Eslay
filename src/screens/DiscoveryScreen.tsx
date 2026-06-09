@@ -1,10 +1,10 @@
 ﻿import React, { useMemo, useState } from "react";
-import { ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { PoiImageBackground } from "../components/PoiImageBackground";
 import { DestinationCard, HeroCard, Input, Pill, Screen, SearchBar, SectionTitle, SoftCard } from "../components/Ui";
 import { useAppContext } from "../context/AppContext";
 import { discoveryFilters } from "../data/mockData";
-import { getPoiImage, getRealCityPois } from "../data/realCityPois";
+import { buildRealCityDestinations, getPoiImage, getRealCityPois } from "../data/realCityPois";
 import { radius, spacing } from "../theme/tokens";
 import { Destination, DiscoveryFilter } from "../types";
 import { filterDestinationsByFilters, sortDestinations } from "../utils/recommendations";
@@ -87,23 +87,23 @@ const businessGlyph = (service: BusinessService) =>
   })[service];
 
 const mockBusinessApi = (service: BusinessService, city: string, zh: boolean): BusinessApiItem[] => {
-  const cityName = city ? placeText(zh ? "zh" : "en", city) : (zh ? "\u5f53\u524d\u57ce\u5e02" : "Current city");
+  const cityName = city ? placeText(zh ? "zh" : "en", city) : (zh ? "\u76ee\u7684\u5730" : "Selected destination");
   const data: Record<BusinessService, BusinessApiItem[]> = {
     flights: [
       {
         id: "flight-1",
         title: zh ? `${cityName}\u7279\u60e0\u5f80\u8fd4` : `${cityName} saver round trip`,
-        subtitle: zh ? "\u542b\u884c\u674e\u989d\uff0c\u53ef\u6539\u7b7e\u65f6\u6bb5" : "Baggage included, flexible change window",
+        subtitle: zh ? `\u524d\u5f80${cityName}\u7684\u4fbf\u6377\u822a\u7ebf\uff0c\u542b\u884c\u674e\u989d\u4e0e\u53ef\u6539\u7b7e\u65f6\u6bb5` : `Convenient route to ${cityName}, baggage included with a flexible change window`,
         price: zh ? "\u00a5 1280 \u8d77" : "$178+",
-        meta: zh ? "\u76f4\u98de\u4f18\u5148  2h 20m" : "Direct-first  2h 20m",
-        badge: zh ? "\u5047\u63a5\u53e3" : "MOCK API",
+        meta: zh ? `${cityName}  \u76f4\u98de\u4f18\u5148` : `${cityName}  direct-first`,
+        badge: zh ? "\u7279\u60e0" : "DEAL",
       },
       {
         id: "flight-2",
-        title: zh ? "\u591c\u95f4\u62b5\u8fbe\u65b9\u6848" : "Late-arrival option",
-        subtitle: zh ? "\u9002\u5408\u4e0b\u73ed\u540e\u51fa\u53d1\uff0c\u7b2c\u4e8c\u5929\u76f4\u63a5\u5f00\u73a9" : "After-work departure, start exploring the next morning",
+        title: zh ? `${cityName}\u591c\u95f4\u62b5\u8fbe\u65b9\u6848` : `${cityName} late-arrival option`,
+        subtitle: zh ? `\u9002\u5408\u4e0b\u73ed\u540e\u51fa\u53d1\uff0c\u62b5\u8fbe${cityName}\u540e\u7b2c\u4e8c\u5929\u76f4\u63a5\u5f00\u73a9` : `After-work departure, arrive in ${cityName} and start exploring the next morning`,
         price: zh ? "\u00a5 960 \u8d77" : "$132+",
-        meta: zh ? "\u7ecf\u6d4e\u8212\u9002  1\u6b21\u4e2d\u8f6c" : "Value comfort  1 stop",
+        meta: zh ? `${cityName}  \u7ecf\u6d4e\u8212\u9002` : `${cityName}  value comfort`,
         badge: zh ? "\u63a8\u8350" : "PICK",
       },
     ],
@@ -111,17 +111,17 @@ const mockBusinessApi = (service: BusinessService, city: string, zh: boolean): B
       {
         id: "hotel-1",
         title: zh ? `${cityName}\u57ce\u5e02\u4e2d\u5fc3\u8bbe\u8ba1\u9152\u5e97` : `${cityName} central design hotel`,
-        subtitle: zh ? "\u6b65\u884c\u53ef\u5230\u6838\u5fc3\u666f\u70b9\uff0c\u65e9\u9910\u8bc4\u5206\u9ad8" : "Walkable to core stops, strong breakfast rating",
+        subtitle: zh ? `\u4f4d\u4e8e${cityName}\u6838\u5fc3\u533a\uff0c\u6b65\u884c\u53ef\u5230\u4e3b\u8981\u666f\u70b9\uff0c\u65e9\u9910\u8bc4\u5206\u9ad8` : `Central ${cityName} stay, walkable to major stops with a strong breakfast rating`,
         price: zh ? "\u00a5 680 /\u665a" : "$96 / night",
-        meta: zh ? "4.8 \u5206  900m \u5230\u4e3b\u7ebf" : "4.8 rating  900m to route",
+        meta: zh ? `${cityName}  4.8 \u5206` : `${cityName}  4.8 rating`,
         badge: zh ? "\u4f4f\u5f97\u8fd1" : "NEAR ROUTE",
       },
       {
         id: "hotel-2",
-        title: zh ? "\u666f\u89c2\u9732\u53f0\u5ea6\u5047\u9152\u5e97" : "View terrace resort stay",
-        subtitle: zh ? "\u9002\u5408\u653e\u677e\u578b\u884c\u7a0b\uff0c\u6709\u63a5\u9001\u670d\u52a1" : "Best for slower routes, transfer service included",
+        title: zh ? `${cityName}\u666f\u89c2\u9732\u53f0\u5ea6\u5047\u9152\u5e97` : `${cityName} view terrace resort stay`,
+        subtitle: zh ? `\u9002\u5408${cityName}\u653e\u677e\u578b\u884c\u7a0b\uff0c\u542b\u63a5\u9001\u670d\u52a1` : `Best for slower ${cityName} routes, transfer service included`,
         price: zh ? "\u00a5 1180 /\u665a" : "$166 / night",
-        meta: zh ? "4.9 \u5206  \u542b\u63a5\u9001" : "4.9 rating  transfer included",
+        meta: zh ? `${cityName}  4.9 \u5206` : `${cityName}  4.9 rating`,
         badge: zh ? "\u9ad8\u7ea7\u611f" : "PREMIUM",
       },
     ],
@@ -129,17 +129,17 @@ const mockBusinessApi = (service: BusinessService, city: string, zh: boolean): B
       {
         id: "poi-1",
         title: zh ? `${cityName}\u70ed\u95e8\u666f\u70b9\u901a\u7968` : `${cityName} attraction pass`,
-        subtitle: zh ? "\u8986\u76d6\u5f53\u524d\u884c\u7a0b\u9644\u8fd1\u591a\u4e2a\u666f\u70b9" : "Covers multiple stops near your current route",
+        subtitle: zh ? `\u8986\u76d6${cityName}\u70ed\u95e8\u666f\u70b9\uff0c\u9002\u5408\u4e00\u5929\u5185\u7ec4\u5408\u6e38\u73a9` : `Covers popular ${cityName} attractions for a one-day bundled route`,
         price: zh ? "\u00a5 168 \u8d77" : "$24+",
-        meta: zh ? "\u514d\u6392\u961f  \u7535\u5b50\u7968" : "Skip line  e-ticket",
+        meta: zh ? `${cityName}  \u7535\u5b50\u7968` : `${cityName}  e-ticket`,
         badge: zh ? "\u95e8\u7968" : "TICKET",
       },
       {
         id: "poi-2",
-        title: zh ? "\u534a\u65e5\u57ce\u5e02\u5bfc\u89c8" : "Half-day city guided walk",
-        subtitle: zh ? "\u4e13\u4eba\u5e26\u8def\uff0c\u9002\u5408\u7b2c\u4e00\u6b21\u5230\u8bbf" : "Hosted route, ideal for first-time visitors",
+        title: zh ? `${cityName}\u534a\u65e5\u57ce\u5e02\u5bfc\u89c8` : `${cityName} half-day guided walk`,
+        subtitle: zh ? `\u4e13\u4eba\u5e26\u8def\u8d70\u8fc7${cityName}\u7cbe\u534e\u7247\u533a\uff0c\u9002\u5408\u7b2c\u4e00\u6b21\u5230\u8bbf` : `Hosted route through ${cityName} highlights, ideal for first-time visitors`,
         price: zh ? "\u00a5 260 /\u4eba" : "$36 / person",
-        meta: zh ? "3h  \u5c0f\u56e2" : "3h  small group",
+        meta: zh ? `${cityName}  3h \u5c0f\u56e2` : `${cityName}  3h small group`,
         badge: zh ? "\u5bfc\u89c8" : "GUIDED",
       },
     ],
@@ -147,17 +147,17 @@ const mockBusinessApi = (service: BusinessService, city: string, zh: boolean): B
       {
         id: "food-1",
         title: zh ? `${cityName}\u5fc5\u5403\u672c\u5730\u5c0f\u5403\u7ebf` : `${cityName} local bite trail`,
-        subtitle: zh ? "\u6309\u4f60\u7684\u996e\u98df\u504f\u597d\u63a8\u8350\u9910\u5385" : "Restaurant picks aligned with your diet profile",
+        subtitle: zh ? `\u6309\u4f60\u7684\u996e\u98df\u504f\u597d\u63a8\u8350${cityName}\u9910\u5385\u548c\u5c0f\u5403\u8857` : `Restaurant and street-food picks in ${cityName} aligned with your diet profile`,
         price: zh ? "\u00a5 88 \u8d77" : "$12+",
-        meta: zh ? "\u665a\u9910\u65f6\u6bb5  1.8km" : "Dinner window  1.8km",
+        meta: zh ? `${cityName}  \u665a\u9910\u65f6\u6bb5` : `${cityName}  dinner window`,
         badge: zh ? "\u7f8e\u98df" : "EATS",
       },
       {
         id: "food-2",
-        title: zh ? "\u65e9\u5348\u9910\u5496\u5561\u5730\u56fe" : "Brunch and cafe map",
-        subtitle: zh ? "\u9002\u5408\u6162\u8282\u594f\u65e5\u7a0b\uff0c\u53ef\u4e00\u952e\u52a0\u5165\u884c\u7a0b" : "Slow-day friendly, ready to add into itinerary",
+        title: zh ? `${cityName}\u65e9\u5348\u9910\u5496\u5561\u5730\u56fe` : `${cityName} brunch and cafe map`,
+        subtitle: zh ? `${cityName}\u6162\u8282\u594f\u65e5\u7a0b\u53ef\u7528\uff0c\u9002\u5408\u52a0\u5165\u4e0a\u5348\u6216\u4e0b\u5348\u884c\u7a0b` : `Slow-day friendly ${cityName} cafe picks, ready for morning or afternoon routes`,
         price: zh ? "\u00a5 58 \u8d77" : "$8+",
-        meta: zh ? "\u4eba\u6c14\u5e97  \u9700\u9884\u7ea6" : "Popular spots  booking advised",
+        meta: zh ? `${cityName}  \u4eba\u6c14\u5e97` : `${cityName}  popular spots`,
         badge: zh ? "\u5496\u5561" : "CAFE",
       },
     ],
@@ -165,17 +165,17 @@ const mockBusinessApi = (service: BusinessService, city: string, zh: boolean): B
       {
         id: "guide-1",
         title: zh ? `${cityName} 24 \u5c0f\u65f6\u5feb\u901f\u653b\u7565` : `${cityName} 24-hour quick guide`,
-        subtitle: zh ? "\u9002\u5408\u77ed\u9014\u6216\u4e2d\u8f6c\uff0c\u4f18\u5148\u7cbe\u534e\u70b9" : "For short trips or layovers, highlights first",
+        subtitle: zh ? `\u9002\u5408${cityName}\u77ed\u9014\u6216\u4e2d\u8f6c\uff0c\u4f18\u5148\u7cbe\u534e\u70b9` : `For short ${cityName} trips or layovers, highlights first`,
         price: zh ? "\u514d\u8d39" : "Free",
-        meta: zh ? "8 \u4e2a\u6a21\u5757  \u53ef\u79bb\u7ebf" : "8 modules  offline-ready",
+        meta: zh ? `${cityName}  8 \u4e2a\u6a21\u5757` : `${cityName}  8 modules`,
         badge: zh ? "\u653b\u7565" : "GUIDE",
       },
       {
         id: "guide-2",
-        title: zh ? "\u907f\u5751\u4e0e\u9884\u7ea6\u63d0\u9192" : "Avoidance and booking reminders",
-        subtitle: zh ? "\u5f00\u653e\u65f6\u95f4\u3001\u9ad8\u5cf0\u671f\u548c\u9884\u7ea6\u8282\u70b9" : "Opening hours, peak windows, and reservation notes",
+        title: zh ? `${cityName}\u907f\u5751\u4e0e\u9884\u7ea6\u63d0\u9192` : `${cityName} booking and timing reminders`,
+        subtitle: zh ? `${cityName}\u5f00\u653e\u65f6\u95f4\u3001\u9ad8\u5cf0\u671f\u548c\u9884\u7ea6\u8282\u70b9` : `${cityName} opening hours, peak windows, and reservation notes`,
         price: zh ? "\u514d\u8d39" : "Free",
-        meta: zh ? "\u5b9e\u7528\u63d0\u9192  AI \u6458\u8981" : "Practical alerts  AI summary",
+        meta: zh ? `${cityName}  \u5b9e\u7528\u63d0\u9192` : `${cityName}  practical alerts`,
         badge: zh ? "\u63d0\u9192" : "ALERTS",
       },
     ],
@@ -277,13 +277,6 @@ const ctripStyleFilterGroups: Array<{ title: string; items: DiscoveryFilter[] }>
   { title: "Popular", items: ["Weekend", "Short Trip", "Beach", "City Break", "Food"] },
   { title: "Travel Style", items: ["Adventure", "Nature", "Culture", "Relaxation", "Photo Spots"] },
   { title: "Budget", items: ["Budget", "Luxury"] },
-  { title: "Companion", items: ["Family", "Couple", "Foodie"] },
-];
-
-const moreFilterSections: Array<{ title: string; items: DiscoveryFilter[] }> = [
-  { title: "Trip Length", items: ["Weekend", "Short Trip", "City Break"] },
-  { title: "Budget", items: ["Budget", "Luxury"] },
-  { title: "Rating Priority", items: ["Photo Spots", "Culture", "Nature"] },
   { title: "Companion", items: ["Family", "Couple", "Foodie"] },
 ];
 
@@ -458,6 +451,24 @@ const buildCityPreviewStops = (destination: Destination | undefined, durationDay
   });
 };
 
+const normalizeResultKey = (destination: Destination) =>
+  `${destination.city}::${destination.title}`
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "");
+
+const uniqueDestinations = (destinations: Destination[]) => {
+  const seen = new Set<string>();
+  return destinations.filter((destination) => {
+    const key = normalizeResultKey(destination);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+};
+
 const BusinessServiceScreen = ({
   service,
   city,
@@ -470,6 +481,7 @@ const BusinessServiceScreen = ({
   const { state, theme } = useAppContext();
   const zh = state.locale === "zh";
   const items = mockBusinessApi(service, city, zh);
+  const cityLabel = city ? placeText(state.locale, city) : (zh ? "\u76ee\u7684\u5730" : "Selected destination");
 
   return (
     <Screen>
@@ -482,10 +494,10 @@ const BusinessServiceScreen = ({
         <View style={styles.businessGlyphPlate}>
           <Text style={styles.businessGlyphText}>{businessGlyph(service)}</Text>
         </View>
-        <Text style={styles.businessHeroKicker}>{zh ? "\u5047\u63a5\u53e3\u6f14\u793a" : "MOCK SERVICE API"}</Text>
+        <Text style={styles.businessHeroKicker}>{zh ? "\u57ce\u5e02\u670d\u52a1\u5339\u914d" : "CITY SERVICE MATCH"}</Text>
         <Text style={styles.businessHeroTitle}>{businessTitle(service, zh)}</Text>
         <Text style={styles.businessHeroMeta}>
-          {placeText(state.locale, city)}  {items.length} {zh ? "\u6761\u7ed3\u679c" : "results"}
+          {cityLabel}  {items.length} {zh ? "\u6761\u7ed3\u679c" : "results"}
         </Text>
       </View>
 
@@ -494,12 +506,12 @@ const BusinessServiceScreen = ({
           <View style={[styles.apiPulse, { backgroundColor: theme.colors.success }]} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.businessApiTitle, { color: theme.colors.text }]}>
-              {zh ? "\u63a5\u53e3\u72b6\u6001" : "API status"}
+              {zh ? "\u5df2\u4e3a\u4f60\u5339\u914d" : "Matched for you"}
             </Text>
             <Text style={[styles.businessApiBody, { color: theme.colors.subtext }]}>
               {zh
-                ? `GET /mock/${service}?city=${city}  \u5df2\u8fd4\u56de\u672c\u5730\u6f14\u793a\u6570\u636e`
-                : `GET /mock/${service}?city=${city}  returned local demo data`}
+                ? `${cityLabel}\u7684${businessTitle(service, true)}\u7ed3\u679c\u5df2\u6309\u5f53\u524d\u641c\u7d22\u548c\u504f\u597d\u66f4\u65b0`
+                : `${businessTitle(service, false)} results for ${cityLabel} are updated from your current search and preferences`}
             </Text>
           </View>
           <Text style={[styles.apiStatus, { color: theme.colors.success }]}>200</Text>
@@ -536,9 +548,7 @@ export const DiscoveryScreen = () => {
   const [selectedDestinationId, setSelectedDestinationId] = useState<string>("");
   const [startDate, setStartDate] = useState("2026-06-01");
   const [durationDays, setDurationDays] = useState(3);
-  const [selectedBusiness, setSelectedBusiness] = useState("Flights");
   const [activeBusinessService, setActiveBusinessService] = useState<BusinessService | null>(null);
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const zh = state.locale === "zh";
 
   const ranked = sortDestinations(
@@ -551,7 +561,19 @@ export const DiscoveryScreen = () => {
       dietaryMode: state.dietaryMode,
     },
   );
-  const diyDestinations = filterDestinationsByFilters(ranked, state.searchQuery, state.activeDiscoveryFilters);
+  const diySearchPool = useMemo(() => {
+    if (state.searchQuery.trim().length === 0) {
+      return ranked;
+    }
+    const cityAnchors = uniqueDestinations(ranked).filter(
+      (destination, index, self) => self.findIndex((item) => item.city === destination.city) === index,
+    );
+    const poiDestinations = cityAnchors.flatMap((destination) =>
+      buildRealCityDestinations(destination, `search-${destination.id}`, 12),
+    );
+    return uniqueDestinations([...poiDestinations, ...ranked]);
+  }, [ranked, state.searchQuery]);
+  const diyDestinations = uniqueDestinations(filterDestinationsByFilters(diySearchPool, state.searchQuery, state.activeDiscoveryFilters));
   const moodDestinations = useMemo(() => {
     const matches = ranked.filter(moodMatch(selectedMood)).slice(0, 10);
     return matches;
@@ -565,7 +587,7 @@ export const DiscoveryScreen = () => {
     state.activeDiscoveryFilters.length === 0
       ? filterText(state.locale, "All")
       : state.activeDiscoveryFilters.map((filter) => filterText(state.locale, filter)).join(", ");
-  const businessCity = diyDestinations[0]?.city ?? selectedDestination?.city ?? ranked[0]?.city ?? "";
+  const businessCity = state.searchQuery.trim().length > 0 ? diyDestinations[0]?.city ?? "" : "";
 
   if (activeBusinessService) {
     return (
@@ -591,8 +613,8 @@ export const DiscoveryScreen = () => {
       />
 
       <View style={[styles.modeSwitch, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-        <View style={[styles.modeOrbit, { borderColor: theme.colors.border }]} />
-        <View style={[styles.modeGlow, { backgroundColor: theme.colors.accentSoft }]} />
+        <View pointerEvents="none" style={[styles.modeOrbit, { borderColor: theme.colors.border }]} />
+        <View pointerEvents="none" style={[styles.modeGlow, { backgroundColor: theme.colors.accentSoft }]} />
         <Pressable
           onPress={() => setPlanningMode("mood")}
           style={[
@@ -847,7 +869,7 @@ export const DiscoveryScreen = () => {
         </>
       ) : (
         <>
-          <View style={styles.innerPad}>
+          <View style={[styles.innerPad, styles.diySearchDock]}>
             <SearchBar value={state.searchQuery} onChangeText={state.actions.setSearchQuery} placeholder={t(state.locale, "searchPlaceholder")} />
           </View>
 
@@ -864,39 +886,32 @@ export const DiscoveryScreen = () => {
 
           <View style={[styles.businessPanel, styles.innerPad, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <Text style={[styles.businessPanelTitle, { color: theme.colors.text }]}>
-              {zh ? cn.serviceEntry : "Choose a service entry"}
+              {zh ? "\u76f8\u5173\u4e1a\u52a1\u8df3\u8f6c\u670d\u52a1" : "Related service shortcuts"}
             </Text>
             <View style={styles.businessGrid}>
-              {businessEntries.map((entry, index) => {
-                const active = selectedBusiness === entry.label;
-                return (
-                  <Pressable
-                    key={entry.label}
-                    onPress={() => {
-                      setSelectedBusiness(entry.label);
-                      state.actions.toggleDiscoveryFilter(entry.filter);
-                      setActiveBusinessService(entry.service);
-                    }}
-                    style={[
-                      styles.businessItem,
-                      {
-                        backgroundColor: active ? theme.colors.accentSoft : theme.colors.surfaceAlt,
-                        borderColor: active ? theme.colors.accent : theme.colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.businessItemGlow, { backgroundColor: active ? theme.colors.accent : theme.colors.accentSoft }]} />
-                    <Text style={[styles.businessCode, { color: active ? theme.colors.accent : theme.colors.subtext }]}>0{index + 1}</Text>
-                    <View style={[styles.businessMiniIcon, { borderColor: active ? theme.colors.accent : theme.colors.border }]}>
-                      <Text style={[styles.businessMiniIconText, { color: active ? theme.colors.accent : theme.colors.subtext }]}>
-                        {entry.code.slice(0, 2)}
-                      </Text>
-                    </View>
-                    <Text style={[styles.businessLabel, { color: theme.colors.text }]}>{textFor(state.locale, entry.label)}</Text>
-                    <Text style={[styles.businessCaption, { color: theme.colors.subtext }]}>{zh ? entry.zhCaption : entry.caption}</Text>
-                  </Pressable>
-                );
-              })}
+              {businessEntries.map((entry, index) => (
+                <Pressable
+                  key={entry.label}
+                  onPress={() => setActiveBusinessService(entry.service)}
+                  style={[
+                    styles.businessItem,
+                    {
+                      backgroundColor: theme.colors.surfaceAlt,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                >
+                  <View style={[styles.businessItemGlow, { backgroundColor: theme.colors.accentSoft }]} />
+                  <Text style={[styles.businessCode, { color: theme.colors.subtext }]}>0{index + 1}</Text>
+                  <View style={[styles.businessMiniIcon, { borderColor: theme.colors.border }]}>
+                    <Text style={[styles.businessMiniIconText, { color: theme.colors.subtext }]}>
+                      {entry.code.slice(0, 2)}
+                    </Text>
+                  </View>
+                  <Text style={[styles.businessLabel, { color: theme.colors.text }]}>{textFor(state.locale, entry.label)}</Text>
+                  <Text style={[styles.businessCaption, { color: theme.colors.subtext }]}>{zh ? entry.zhCaption : entry.caption}</Text>
+                </Pressable>
+              ))}
             </View>
           </View>
 
@@ -915,45 +930,9 @@ export const DiscoveryScreen = () => {
             <View style={{ flex: 1 }}>
               <Text style={[styles.moreFilterTitle, { color: theme.colors.text }]}>{t(state.locale, "selectedFilters")}</Text>
               <Text style={[styles.moreFilterMeta, { color: theme.colors.subtext }]}>
-                {textFor(state.locale, selectedBusiness)}  {selectedFilterDisplay}  {diyDestinations.length} {zh ? cn.results : "results"}
+                {zh ? `\u7b5b\u9009\u7ed3\u679c\u6570\uff1a${diyDestinations.length}` : `Filtered results: ${diyDestinations.length}`}
               </Text>
             </View>
-            <Pressable onPress={() => setMoreFiltersOpen(true)} style={[styles.moreButton, { backgroundColor: theme.colors.accent }]}>
-              <Text style={styles.moreButtonText}>{t(state.locale, "more")}</Text>
-            </Pressable>
-          </View>
-
-          <SectionTitle title={t(state.locale, "travelFilters")} hint={t(state.locale, "multiSelectDiscovery")} />
-          <View style={[styles.filterGroups, styles.innerPad]}>
-            {ctripStyleFilterGroups.map((group) => (
-              <View key={group.title} style={styles.filterGroupBlock}>
-                <Text style={[styles.groupTitle, { color: theme.colors.text }]}>{groupTitle(zh, group.title)}</Text>
-                <View style={styles.filterGrid}>
-                  {group.items.map((item, index) => {
-                    const active = state.activeDiscoveryFilters.includes(item);
-                    return (
-                      <Pressable
-                        key={item}
-                        onPress={() => state.actions.toggleDiscoveryFilter(item)}
-                        style={[
-                          styles.filterTile,
-                          {
-                            backgroundColor: active ? theme.colors.accentSoft : theme.colors.surfaceAlt,
-                            borderColor: active ? theme.colors.accent : theme.colors.border,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.filterTileCode, { color: active ? theme.colors.accent : theme.colors.subtext }]}>0{index + 1}</Text>
-                        <Text style={[styles.filterTileTitle, { color: active ? theme.colors.accent : theme.colors.text }]}>
-                          {filterText(state.locale, item)}
-                        </Text>
-                        <Text style={[styles.filterTileMeta, { color: theme.colors.subtext }]}>{filterMeta(zh, item)}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
           </View>
 
           <SectionTitle title={t(state.locale, "recommended")} hint={`${diyDestinations.length} ${t(state.locale, "cards")}`} />
@@ -965,62 +944,24 @@ export const DiscoveryScreen = () => {
                 destination={destination}
                 saved={state.savedDestinationIds.includes(destination.id)}
                 onSave={() => state.actions.toggleSaveDestination(destination)}
-                onOpenMap={() => state.actions.setHighlightedDestination(destination.id)}
+                onOpenMap={() => state.actions.viewDestinationRoute(destination)}
               />
             ))}
           </View>
         </>
       )}
 
-      <Modal animationType="slide" transparent visible={moreFiltersOpen} onRequestClose={() => setMoreFiltersOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.filterSheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>{t(state.locale, "moreFilters")}</Text>
-              <Pressable onPress={() => setMoreFiltersOpen(false)} style={[styles.sheetClose, { backgroundColor: theme.colors.surfaceAlt }]}>
-                <Text style={{ color: theme.colors.text, fontWeight: "800" }}>X</Text>
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
-              {moreFilterSections.map((section) => (
-                <View key={section.title} style={styles.sheetSection}>
-                  <Text style={[styles.sheetSectionTitle, { color: theme.colors.text }]}>{groupTitle(zh, section.title)}</Text>
-                  <View style={styles.sheetPills}>
-                    {section.items.map((item) => (
-                      <Pill
-                        key={item}
-                        label={filterText(state.locale, item)}
-                        selected={state.activeDiscoveryFilters.includes(item)}
-                        onPress={() => state.actions.toggleDiscoveryFilter(item)}
-                      />
-                    ))}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            <View style={styles.sheetActions}>
-              <Pressable
-                onPress={() => {
-                  state.actions.resetDiscoveryFilters();
-                  setSelectedBusiness("Flights");
-                }}
-                style={[styles.sheetSecondary, { borderColor: theme.colors.border }]}
-              >
-                <Text style={{ color: theme.colors.text, fontWeight: "800" }}>{t(state.locale, "reset")}</Text>
-              </Pressable>
-              <Pressable onPress={() => setMoreFiltersOpen(false)} style={[styles.sheetPrimary, { backgroundColor: theme.colors.accent }]}>
-                <Text style={styles.sheetPrimaryText}>{t(state.locale, "showResults")}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </Screen>
   );
 };
 
 const styles = StyleSheet.create({
   innerPad: { marginHorizontal: spacing.md },
+  diySearchDock: {
+    position: "relative",
+    zIndex: 3,
+    elevation: 3,
+  },
   modeSwitch: {
     marginHorizontal: spacing.md,
     borderWidth: 1,

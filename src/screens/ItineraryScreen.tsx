@@ -1,5 +1,5 @@
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Modal, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { PoiImageBackground } from "../components/PoiImageBackground";
 import { HeroCard, Pill, Screen, SectionTitle, SoftCard } from "../components/Ui";
 import { useAppContext } from "../context/AppContext";
@@ -7,6 +7,7 @@ import { radius, spacing } from "../theme/tokens";
 import { Locale } from "../types";
 import { t, textFor } from "../utils/i18n";
 import { placeLineText, placeText } from "../utils/placeNames";
+import { tripDisplayDateRange, tripDisplayLocation, tripDisplayNote, tripDisplayTitle } from "../utils/tripDisplay";
 
 const copy = (zh: boolean, zhText: string, enText: string) => (zh ? zhText : enText);
 
@@ -29,18 +30,53 @@ const stopTypeLabel = (locale: Locale, type: string) =>
 
 export const ItineraryScreen = () => {
   const { state, activeTrip, destinationsById, theme } = useAppContext();
+  const [editTimes, setEditTimes] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [notice, setNotice] = useState("");
   const zh = state.locale === "zh";
+  const displayTitle = tripDisplayTitle(state.locale, activeTrip);
+  const displayLocation = tripDisplayLocation(state.locale, activeTrip);
+  const displayDateRange = tripDisplayDateRange(state.locale, activeTrip);
+  const displayNote = tripDisplayNote(state.locale, activeTrip);
   const groupedStops = activeTrip.stops.reduce<Record<number, typeof activeTrip.stops>>((acc, stop) => {
     acc[stop.day] = [...(acc[stop.day] ?? []), stop];
     return acc;
   }, {});
   const dayKeys = Object.keys(groupedStops);
+  const shiftTime = (time: string, minutes: number) => {
+    const [hourText, minuteText] = time.split(":");
+    const total = (Number(hourText) || 0) * 60 + (Number(minuteText) || 0) + minutes;
+    const normalized = ((total % 1440) + 1440) % 1440;
+    const hour = Math.floor(normalized / 60).toString().padStart(2, "0");
+    const minute = (normalized % 60).toString().padStart(2, "0");
+    return `${hour}:${minute}`;
+  };
+  const showNotice = (message: string) => {
+    setNotice(message);
+    setTimeout(() => setNotice(""), 2200);
+  };
+  const shareTrip = async () => {
+    const stops = activeTrip.stops
+      .map((stop, index) => {
+        const destination = destinationsById[stop.destinationId];
+        return destination ? `${index + 1}. ${stop.time} ${placeText(state.locale, destination.title)}` : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+    const message = `${displayTitle}\n${displayLocation} · ${displayDateRange}\n${stops}`;
+    try {
+      await Share.share({ message, title: displayTitle });
+      showNotice(copy(zh, "行程分享内容已生成。", "Itinerary share sheet opened."));
+    } catch {
+      showNotice(copy(zh, "当前设备暂不支持系统分享。", "Sharing is not available on this device."));
+    }
+  };
 
   return (
     <Screen>
       <HeroCard
-        title={activeTrip.title}
-        subtitle={`${placeLineText(state.locale, activeTrip.location)} \u00b7 ${activeTrip.dateRange}`}
+        title={displayTitle}
+        subtitle={`${displayLocation} \u00b7 ${displayDateRange}`}
         image={activeTrip.coverImage}
         rightBadge={t(state.locale, "tripPlanner")}
       />
@@ -52,14 +88,38 @@ export const ItineraryScreen = () => {
           <Text style={[styles.noteLead, { color: theme.colors.text }]}>
             {copy(zh, "\u884c\u7a0b\u6982\u89c8", "Trip Header")}
           </Text>
-          <Text style={[styles.noteBody, { color: theme.colors.subtext }]}>{activeTrip.travelerNote}</Text>
+          <Text style={[styles.noteBody, { color: theme.colors.subtext }]}>{displayNote}</Text>
           <View style={styles.inlineActions}>
-            <Pill label={copy(zh, "\u6dfb\u52a0\u6d3b\u52a8", "Add Activity")} />
-            <Pill label={copy(zh, "\u5206\u4eab\u884c\u7a0b", "Share Itinerary")} />
-            <Pill label={copy(zh, "\u9884\u8ba2\u4ea4\u901a", "Book Transport")} />
-            <Pill label={copy(zh, "\u7f16\u8f91\u65f6\u95f4", "Edit Time")} />
+            {false ? (
             <Pressable
-              onPress={() => state.actions.deleteTrip(activeTrip.id)}
+              onPress={() => {
+                state.actions.addActivityToTrip(activeTrip.id);
+                showNotice(copy(zh, "已添加一个活动到当前行程。", "Activity added to this itinerary."));
+              }}
+              style={[styles.actionChip, { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt }]}
+            >
+              <Text style={[styles.actionChipText, { color: theme.colors.text }]}>{copy(zh, "\u6dfb\u52a0\u6d3b\u52a8", "Add Activity")}</Text>
+            </Pressable>
+            ) : null}
+            <Pressable onPress={shareTrip} style={[styles.actionChip, { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt }]}>
+              <Text style={[styles.actionChipText, { color: theme.colors.text }]}>{copy(zh, "\u5206\u4eab\u884c\u7a0b", "Share Itinerary")}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setEditTimes((current) => !current)}
+              style={[
+                styles.actionChip,
+                {
+                  borderColor: editTimes ? theme.colors.accent : theme.colors.border,
+                  backgroundColor: editTimes ? theme.colors.accentSoft : theme.colors.surfaceAlt,
+                },
+              ]}
+            >
+              <Text style={[styles.actionChipText, { color: editTimes ? theme.colors.accent : theme.colors.text }]}>
+                {editTimes ? copy(zh, "\u5b8c\u6210\u7f16\u8f91", "Done Editing") : copy(zh, "\u7f16\u8f91\u65f6\u95f4", "Edit Time")}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setDeleteOpen(true)}
               style={[styles.deleteChip, { borderColor: theme.colors.danger, backgroundColor: `${theme.colors.danger}14` }]}
             >
               <Text style={[styles.deleteChipText, { color: theme.colors.danger }]}>
@@ -67,6 +127,11 @@ export const ItineraryScreen = () => {
               </Text>
             </Pressable>
           </View>
+          {notice ? (
+            <View style={[styles.noticeBar, { backgroundColor: theme.colors.accentSoft, borderColor: theme.colors.border }]}>
+              <Text style={[styles.noticeText, { color: theme.colors.accent }]}>{notice}</Text>
+            </View>
+          ) : null}
         </SoftCard>
       </View>
 
@@ -183,6 +248,24 @@ export const ItineraryScreen = () => {
 
                         <Text style={[styles.stopNote, { color: theme.colors.subtext }]}>{stop.note}</Text>
 
+                        {editTimes ? (
+                          <View style={styles.timeEditRow}>
+                            <Pressable
+                              onPress={() => state.actions.updateStopTime(activeTrip.id, stop.id, shiftTime(stop.time, -30))}
+                              style={[styles.timeButton, { borderColor: theme.colors.border }]}
+                            >
+                              <Text style={[styles.timeButtonText, { color: theme.colors.text }]}>-30m</Text>
+                            </Pressable>
+                            <Text style={[styles.timeEditValue, { color: theme.colors.accent }]}>{stop.time}</Text>
+                            <Pressable
+                              onPress={() => state.actions.updateStopTime(activeTrip.id, stop.id, shiftTime(stop.time, 30))}
+                              style={[styles.timeButton, { borderColor: theme.colors.border }]}
+                            >
+                              <Text style={[styles.timeButtonText, { color: theme.colors.text }]}>+30m</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
+
                         {rearranging ? (
                           <View style={styles.rearrangeRow}>
                             <Pressable
@@ -256,6 +339,32 @@ export const ItineraryScreen = () => {
           </Text>
         </SoftCard>
       </View>
+      <Modal transparent visible={deleteOpen} animationType="fade" onRequestClose={() => setDeleteOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.confirmSheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <Text style={[styles.confirmTitle, { color: theme.colors.text }]}>
+              {copy(zh, "\u5220\u9664\u5f53\u524d\u884c\u7a0b\uff1f", "Delete current itinerary?")}
+            </Text>
+            <Text style={[styles.confirmBody, { color: theme.colors.subtext }]}>
+              {copy(zh, "\u5220\u9664\u540e\u4f1a\u5207\u6362\u5230\u4e0b\u4e00\u4e2a\u884c\u7a0b\uff0c\u4f46\u4e0d\u4f1a\u5220\u9664\u4f60\u6536\u85cf\u7684\u666f\u70b9\u3002", "After deletion, Eslay will switch to the next itinerary. Saved destinations will stay untouched.")}
+            </Text>
+            <View style={styles.confirmActions}>
+              <Pressable onPress={() => setDeleteOpen(false)} style={[styles.confirmButton, { borderColor: theme.colors.border }]}>
+                <Text style={[styles.confirmSecondaryText, { color: theme.colors.text }]}>{copy(zh, "\u53d6\u6d88", "Cancel")}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setDeleteOpen(false);
+                  state.actions.deleteTrip(activeTrip.id);
+                }}
+                style={[styles.confirmButton, { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger }]}
+              >
+                <Text style={styles.confirmPrimaryText}>{copy(zh, "\u786e\u8ba4\u5220\u9664", "Delete")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 };
@@ -283,6 +392,10 @@ const styles = StyleSheet.create({
   noteLead: { fontSize: 14, fontWeight: "800", textTransform: "uppercase" },
   noteBody: { fontSize: 14, lineHeight: 20, marginTop: 8 },
   inlineActions: { marginTop: spacing.md, flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+  actionChip: { borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 10 },
+  actionChipText: { fontSize: 12, fontWeight: "800" },
+  noticeBar: { marginTop: spacing.md, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 10 },
+  noticeText: { fontSize: 12, lineHeight: 17, fontWeight: "800" },
   daySelector: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   emptyText: { fontSize: 14, lineHeight: 20 },
   timelineWrap: { gap: spacing.lg },
@@ -380,6 +493,10 @@ const styles = StyleSheet.create({
   statusTag: { borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 8, alignSelf: "flex-start" },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   stopNote: { fontSize: 14, lineHeight: 20 },
+  timeEditRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  timeButton: { borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 10 },
+  timeButtonText: { fontSize: 12, fontWeight: "900" },
+  timeEditValue: { minWidth: 58, textAlign: "center", fontSize: 16, fontWeight: "900" },
   rearrangeRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, alignItems: "center" },
   arrowButton: { borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 10 },
   deleteButton: { borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 10 },
@@ -387,4 +504,41 @@ const styles = StyleSheet.create({
   deleteChip: { borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 10 },
   deleteChipText: { fontSize: 12, fontWeight: "800" },
   supportStack: { gap: spacing.sm },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: spacing.lg,
+    backgroundColor: "rgba(2, 12, 16, 0.42)",
+  },
+  confirmSheet: {
+    borderWidth: 1,
+    borderRadius: 30,
+    padding: spacing.lg,
+  },
+  confirmTitle: {
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: "900",
+    letterSpacing: -0.4,
+  },
+  confirmBody: {
+    marginTop: spacing.sm,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+  },
+  confirmActions: {
+    marginTop: spacing.lg,
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  confirmButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  confirmSecondaryText: { fontSize: 13, fontWeight: "900" },
+  confirmPrimaryText: { color: "#FFF7EC", fontSize: 13, fontWeight: "900" },
 });

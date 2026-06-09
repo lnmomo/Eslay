@@ -18,7 +18,7 @@ const commonsSearchUrl = (query: string) =>
     query,
   )}&gsrlimit=8&prop=imageinfo&iiprop=url|mime&iiurlwidth=1200&format=json&origin=*`;
 
-const searchThumbnailUrl = (title: string, city: string) =>
+export const searchPoiThumbnailUrl = (title: string, city: string) =>
   `https://tse1.mm.bing.net/th?q=${encodeURIComponent(`${title} ${city} attraction photo`)}&w=1200&h=800&c=7&rs=1&p=0&o=5&pid=1.7`;
 
 const normalize = (value: string) =>
@@ -160,5 +160,7 @@ export const resolvePoiImage = async (title: string, city: string, fallbackImage
     }
   }
 
-  return searchThumbnailUrl(title, city);
+  const searchImage = searchPoiThumbnailUrl(title, city);
+  imageCache.set(cacheKey, searchImage);
+  return searchImage;
 };

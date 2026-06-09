@@ -6,6 +6,7 @@ import { useAppContext } from "../context/AppContext";
 import { radius, spacing } from "../theme/tokens";
 import { t, textFor } from "../utils/i18n";
 import { placeLineText, placeText } from "../utils/placeNames";
+import { tripDisplayDateRange, tripDisplayLocation, tripDisplayNote, tripDisplayTitle } from "../utils/tripDisplay";
 
 type Draft = {
   title: string;
@@ -45,6 +46,10 @@ export const SavedScreen = () => {
     setEditingId(null);
   };
   const pendingDestination = pendingAddId ? destinationsById[pendingAddId] : undefined;
+  const tripDays = (tripStops: typeof state.trips[number]["stops"]) => {
+    const maxDay = tripStops.reduce((max, stop) => Math.max(max, stop.day), 1);
+    return Array.from({ length: maxDay }, (_, index) => index + 1);
+  };
 
   return (
     <Screen>
@@ -75,12 +80,12 @@ export const SavedScreen = () => {
                 <ImageBackground source={{ uri: trip.coverImage }} style={styles.tripImage} imageStyle={{ borderRadius: 24 }}>
                   <View style={styles.imageShade}>
                     <Text style={styles.imageKicker}>{trip.status.toUpperCase()}</Text>
-                    <Text style={styles.imageTitle}>{placeLineText(state.locale, trip.location)}</Text>
+                    <Text style={styles.imageTitle}>{tripDisplayLocation(state.locale, trip)}</Text>
                   </View>
                 </ImageBackground>
-                <Text style={[styles.title, { color: theme.colors.text }]}>{trip.title}</Text>
+                <Text style={[styles.title, { color: theme.colors.text }]}>{tripDisplayTitle(state.locale, trip)}</Text>
                 <Text style={[styles.meta, { color: theme.colors.subtext }]}>
-                  {placeLineText(state.locale, trip.location)}  {trip.dateRange}  {textFor(state.locale, trip.travelType ?? "Trip")}
+                  {tripDisplayLocation(state.locale, trip)}  {tripDisplayDateRange(state.locale, trip)}  {textFor(state.locale, trip.travelType ?? "Trip")}
                 </Text>
                 <View style={styles.gallery}>
                   {trip.stops.slice(0, 3).map((stop) => (
@@ -91,7 +96,7 @@ export const SavedScreen = () => {
                     </View>
                   ))}
                 </View>
-                <Text style={[styles.note, { color: theme.colors.subtext }]}>{trip.travelerNote}</Text>
+                <Text style={[styles.note, { color: theme.colors.subtext }]}>{tripDisplayNote(state.locale, trip)}</Text>
                 <View style={styles.actionRow}>
                   <Pill label={t(state.locale, "duplicateTrip")} />
                   <Pill label={t(state.locale, "memoryGallery")} />
@@ -237,25 +242,42 @@ export const SavedScreen = () => {
             </Text>
             <View style={styles.tripChoiceList}>
               {state.trips.map((trip) => (
-                <Pressable
+                <View
                   key={trip.id}
-                  onPress={() => {
-                    if (pendingAddId) {
-                      state.actions.addDestinationToTrip(trip.id, pendingAddId);
-                    }
-                    setPendingAddId(null);
-                  }}
                   style={[styles.tripChoice, { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt }]}
                 >
-                  <ImageBackground source={{ uri: trip.coverImage }} style={styles.tripChoiceImage} imageStyle={{ borderRadius: 16 }}>
-                    <View style={styles.tripChoiceShade} />
-                  </ImageBackground>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.tripChoiceTitle, { color: theme.colors.text }]}>{trip.title}</Text>
-                    <Text style={[styles.tripChoiceMeta, { color: theme.colors.subtext }]}>{placeLineText(state.locale, trip.location)}  {trip.dateRange}</Text>
+                  <View style={styles.tripChoiceHeader}>
+                    <ImageBackground source={{ uri: trip.coverImage }} style={styles.tripChoiceImage} imageStyle={{ borderRadius: 16 }}>
+                      <View style={styles.tripChoiceShade} />
+                    </ImageBackground>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.tripChoiceTitle, { color: theme.colors.text }]}>{tripDisplayTitle(state.locale, trip)}</Text>
+                      <Text style={[styles.tripChoiceMeta, { color: theme.colors.subtext }]}>{tripDisplayLocation(state.locale, trip)}  {tripDisplayDateRange(state.locale, trip)}</Text>
+                    </View>
+                    <Text style={{ color: theme.colors.accent, fontWeight: "900" }}>{trip.stops.length}</Text>
                   </View>
-                  <Text style={{ color: theme.colors.accent, fontWeight: "900" }}>{trip.stops.length}</Text>
-                </Pressable>
+                  <Text style={[styles.dayPickerLabel, { color: theme.colors.subtext }]}>
+                    {zh ? "\u9009\u62e9\u52a0\u5165\u7684\u5929\u6570" : "Choose target day"}
+                  </Text>
+                  <View style={styles.dayChoiceRow}>
+                    {tripDays(trip.stops).map((day) => (
+                      <Pressable
+                        key={day}
+                        onPress={() => {
+                          if (pendingAddId) {
+                            state.actions.addDestinationToTrip(trip.id, pendingAddId, day);
+                          }
+                          setPendingAddId(null);
+                        }}
+                        style={[styles.dayChoiceButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
+                      >
+                        <Text style={[styles.dayChoiceText, { color: theme.colors.text }]}>
+                          {zh ? `\u7b2c ${day} \u5929` : `Day ${day}`}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
               ))}
             </View>
             <Pressable onPress={() => setPendingAddId(null)} style={[styles.cancelButton, { borderColor: theme.colors.border }]}>
@@ -440,6 +462,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 22,
     padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  tripChoiceHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
@@ -461,6 +486,28 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     lineHeight: 16,
+  },
+  dayPickerLabel: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  dayChoiceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  dayChoiceButton: {
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 9,
+  },
+  dayChoiceText: {
+    fontSize: 12,
+    fontWeight: "900",
   },
   cancelButton: {
     marginTop: spacing.md,

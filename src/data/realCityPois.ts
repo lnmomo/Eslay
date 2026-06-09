@@ -109,8 +109,7 @@ const fallbackPoiImages = [
 ];
 
 export const getPoiImage = (title: string, city: string, fallbackImage: string) => {
-  const signature = stableImageSignature(`${city}-${title}`);
-  return directPoiImages[title] ?? fallbackPoiImages[signature % fallbackPoiImages.length] ?? fallbackImage;
+  return directPoiImages[title] ?? fallbackImage;
 };
 
 const poi = (

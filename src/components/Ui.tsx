@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ImageBackground,
   Pressable,
@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useAppContext } from "../context/AppContext";
+import { PoiImageBackground } from "./PoiImageBackground";
 import { Destination } from "../types";
 import { radius, spacing } from "../theme/tokens";
 import { filterText, t, tagText } from "../utils/i18n";
@@ -24,9 +25,9 @@ export const Screen = ({
   const { theme } = useAppContext();
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <View style={[styles.screenBlobOne, { backgroundColor: theme.colors.accentSoft }]} />
-      <View style={[styles.screenBlobTwo, { borderColor: theme.colors.border }]} />
-      <View style={[styles.screenGrid, { borderColor: theme.colors.border }]} />
+      <View pointerEvents="none" style={[styles.screenBlobOne, { backgroundColor: theme.colors.accentSoft }]} />
+      <View pointerEvents="none" style={[styles.screenBlobTwo, { borderColor: theme.colors.border }]} />
+      <View pointerEvents="none" style={[styles.screenGrid, { borderColor: theme.colors.border }]} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -240,23 +241,32 @@ export const SearchBar = ({
   onChangeText: (value: string) => void;
   placeholder: string;
 }) => {
-  const { theme } = useAppContext();
+  const { theme, state } = useAppContext();
+  const inputRef = useRef<TextInput>(null);
   return (
-    <View style={[styles.searchBar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+    <Pressable
+      onPress={() => inputRef.current?.focus()}
+      style={[styles.searchBar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+    >
       <View style={[styles.searchGlyph, { borderColor: theme.colors.accent }]}>
         <Text style={[styles.searchIcon, { color: theme.colors.accent }]}>GO</Text>
       </View>
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.subtext}
+        autoCorrect={false}
+        returnKeyType="search"
         style={[styles.searchInput, { color: theme.colors.text }]}
       />
-      <View style={[styles.voicePill, { backgroundColor: theme.colors.accentSoft }]}>
-        <Text style={{ color: theme.colors.accent, fontWeight: "900", fontSize: 12 }}>AI</Text>
+      <View pointerEvents="none" style={[styles.voicePill, { backgroundColor: theme.colors.accentSoft }]}>
+        <Text style={{ color: theme.colors.accent, fontWeight: "900", fontSize: 12 }}>
+          {state.locale === "zh" ? "搜索" : "Search"}
+        </Text>
       </View>
-    </View>
+    </Pressable>
   );
 };
 
@@ -362,14 +372,15 @@ export const DestinationCard = ({
       {imageFailed ? (
         <View style={[styles.destinationImage, styles.destinationFallback]}>{destinationArtwork}</View>
       ) : (
-        <ImageBackground
-          source={{ uri: destination.image }}
+        <PoiImageBackground
+          title={destination.title}
+          city={destination.city}
+          fallbackImage={destination.image}
           style={styles.destinationImage}
           imageStyle={{ borderTopLeftRadius: 30, borderTopRightRadius: 30 }}
-          onError={() => setImageFailed(true)}
         >
           {destinationArtwork}
-        </ImageBackground>
+        </PoiImageBackground>
       )}
       <View style={styles.destinationBody}>
         <View style={[styles.ticketNotchLeft, { backgroundColor: theme.colors.background }]} />

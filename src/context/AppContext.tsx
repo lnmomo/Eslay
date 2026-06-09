@@ -28,9 +28,12 @@ type AppActions = {
   setDietaryMode: (mode: "None" | "Vegetarian" | "Halal") => void;
   finalizeOnboarding: () => void;
   toggleSaveDestination: (destination: Destination) => void;
+  viewDestinationRoute: (destination: Destination) => void;
   updateDestinationDetails: (destinationId: string, updates: Pick<Destination, "title" | "address" | "description">) => void;
   removeSavedDestination: (destinationId: string) => void;
-  addDestinationToTrip: (tripId: string, destinationId: string) => void;
+  addDestinationToTrip: (tripId: string, destinationId: string, day?: number) => void;
+  addActivityToTrip: (tripId: string) => void;
+  updateStopTime: (tripId: string, stopId: string, time: string) => void;
   setHighlightedDestination: (destinationId: string | null) => void;
   moveStop: (tripId: string, stopId: string, direction: "up" | "down") => void;
   deleteStop: (tripId: string, stopId: string) => void;
@@ -210,6 +213,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           const savedDestinationIds = alreadySaved
             ? current.savedDestinationIds.filter((item) => item !== destination.id)
             : [...current.savedDestinationIds, destination.id];
+          const destinationExists = current.destinations.some((item) => item.id === destination.id);
           const interactionWeights = { ...current.interactionWeights };
           destination.tags.forEach((tag) => {
             interactionWeights[tag] = Math.max(0.4, interactionWeights[tag] + (alreadySaved ? -0.3 : 0.8));
@@ -217,7 +221,60 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           return {
             ...current,
             savedDestinationIds,
+            destinations: destinationExists ? current.destinations : [...current.destinations, destination],
             interactionWeights,
+          };
+        }),
+      viewDestinationRoute: (destination) =>
+        setState((current) => {
+          const routeId = `trip-route-${Date.now()}`;
+          const cityStops = buildRealCityDestinations(destination, routeId, 6);
+          const routeDestinations = [
+            destination,
+            ...cityStops.filter((item) => item.title !== destination.title).slice(0, 5),
+          ];
+          const destinationMap = new Map(current.destinations.map((item) => [item.id, item]));
+          routeDestinations.forEach((item) => destinationMap.set(item.id, item));
+          const startCity = placeText(current.locale, destination.city);
+          const trip: Trip = {
+            id: routeId,
+            title:
+              current.locale === "zh"
+                ? `${startCity}路线预览`
+                : `${destination.city} route preview`,
+            dateRange: current.locale === "zh" ? "即时预览" : "Instant preview",
+            coverImage: destination.image,
+            location: destination.city,
+            status: "Draft",
+            travelType: "Solo",
+            travelerNote:
+              current.locale === "zh"
+                ? "从 DIY 结果生成的临时路线，可在地图页查看位置，也可以继续加入正式行程。"
+                : "Temporary route generated from a DIY result. View it on the map or add it into a formal itinerary.",
+            stops: routeDestinations.map((item, index) => ({
+              id: `${routeId}-stop-${index + 1}`,
+              destinationId: item.id,
+              day: 1,
+              time: ["09:00", "10:30", "12:00", "14:30", "16:00", "18:00"][index] ?? "10:00",
+              note:
+                current.locale === "zh"
+                  ? index === 0
+                    ? "你刚刚选择查看的景点。"
+                    : `同城推荐景点，距离上一站约 ${item.distanceKm.toFixed(1)} km。`
+                  : index === 0
+                    ? "The stop you just opened from DIY results."
+                    : `Nearby in-city stop, about ${item.distanceKm.toFixed(1)} km from the previous stop.`,
+              type: item.category === "Food" || item.tags.includes("Foodie") ? "food" : "activity",
+              status: index === 0 ? "Confirmed" : "Planned",
+            })),
+          };
+          return {
+            ...current,
+            destinations: Array.from(destinationMap.values()),
+            trips: [trip, ...current.trips],
+            activeTripId: routeId,
+            highlightedDestinationId: destination.id,
+            activeTab: "map",
           };
         }),
       updateDestinationDetails: (destinationId, updates) =>
@@ -236,7 +293,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
             itemIds: folder.itemIds.filter((id) => id !== destinationId),
           })),
         })),
-      addDestinationToTrip: (tripId, destinationId) =>
+      addDestinationToTrip: (tripId, destinationId, selectedDay) =>
         setState((current) => {
           const destination = current.destinations.find((item) => item.id === destinationId);
           if (!destination) {
@@ -244,6 +301,9 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           }
           const targetTrip = current.trips.find((trip) => trip.id === tripId);
           const nextDay = targetTrip?.stops.reduce((max, stop) => Math.max(max, stop.day), 1) ?? 1;
+          const targetDay = Math.max(1, selectedDay ?? nextDay);
+          const dayStopCount = targetTrip?.stops.filter((stop) => stop.day === targetDay).length ?? 0;
+          const insertTime = ["09:30", "11:30", "14:30", "17:30", "19:30"][dayStopCount] ?? "20:30";
           return {
             ...current,
             trips: current.trips.map((trip) =>
@@ -255,8 +315,8 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
                       {
                         id: `stop-saved-${Date.now()}`,
                         destinationId,
-                        day: nextDay,
-                        time: "18:00",
+                        day: targetDay,
+                        time: insertTime,
                         note:
                           current.locale === "zh"
                             ? "\u4ece\u6536\u85cf\u52a0\u5165\u7684\u666f\u70b9\uff0c\u53ef\u5728\u884c\u7a0b\u9875\u7ee7\u7eed\u8c03\u6574\u987a\u5e8f\u3002"
@@ -273,6 +333,61 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
             activeTab: "itinerary",
           };
         }),
+      addActivityToTrip: (tripId) =>
+        setState((current) => {
+          const targetTrip = current.trips.find((trip) => trip.id === tripId);
+          if (!targetTrip) {
+            return current;
+          }
+          const existingIds = new Set(targetTrip.stops.map((stop) => stop.destinationId));
+          const destination =
+            current.destinations.find((item) => item.city === targetTrip.location && !existingIds.has(item.id)) ??
+            current.destinations.find((item) => !existingIds.has(item.id)) ??
+            current.destinations[0];
+          if (!destination) {
+            return current;
+          }
+          const nextDay = targetTrip.stops.reduce((max, stop) => Math.max(max, stop.day), 1);
+          return {
+            ...current,
+            trips: current.trips.map((trip) =>
+              trip.id === tripId
+                ? {
+                    ...trip,
+                    stops: [
+                      ...trip.stops,
+                      {
+                        id: `stop-activity-${Date.now()}`,
+                        destinationId: destination.id,
+                        day: nextDay,
+                        time: "15:30",
+                        note:
+                          current.locale === "zh"
+                            ? "从添加活动入口加入的新景点，可继续编辑时间或调整顺序。"
+                            : "Added from the activity action. You can edit time or rearrange it later.",
+                        type: destination.category === "Food" || destination.tags.includes("Foodie") ? "food" : "activity",
+                        status: "Planned",
+                      },
+                    ],
+                  }
+                : trip,
+            ),
+            activeTripId: tripId,
+            highlightedDestinationId: destination.id,
+          };
+        }),
+      updateStopTime: (tripId, stopId, time) =>
+        setState((current) => ({
+          ...current,
+          trips: current.trips.map((trip) =>
+            trip.id === tripId
+              ? {
+                  ...trip,
+                  stops: trip.stops.map((stop) => (stop.id === stopId ? { ...stop, time } : stop)),
+                }
+              : trip,
+          ),
+        })),
       setHighlightedDestination: (destinationId) =>
         setState((current) => ({ ...current, highlightedDestinationId: destinationId, activeTab: "map" })),
       moveStop: (tripId, stopId, direction) =>
@@ -321,7 +436,28 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         setState((current) => {
           const trips = current.trips.filter((trip) => trip.id !== tripId);
           if (trips.length === 0) {
-            return current;
+            const emptyTrip: Trip = {
+              id: `trip-empty-${Date.now()}`,
+              title: current.locale === "zh" ? "新的空行程" : "New empty itinerary",
+              dateRange: current.locale === "zh" ? "待规划" : "To be planned",
+              coverImage: current.destinations[0]?.image ?? "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
+              location: current.locale === "zh" ? "未选择目的地" : "No destination selected",
+              status: "Draft",
+              travelerNote:
+                current.locale === "zh"
+                  ? "当前行程已删除。你可以从首页生成新行程，或从收藏里加入想去的景点。"
+                  : "The current itinerary was deleted. Generate a new route from Discover or add saved places.",
+              travelType: "Solo",
+              stops: [],
+            };
+            return {
+              ...current,
+              trips: [emptyTrip],
+              activeTripId: emptyTrip.id,
+              highlightedDestinationId: null,
+              rearrangeDay: null,
+              activeTab: "itinerary",
+            };
           }
           const activeTripId = current.activeTripId === tripId ? trips[0].id : current.activeTripId;
           const activeTrip = trips.find((trip) => trip.id === activeTripId) ?? trips[0];

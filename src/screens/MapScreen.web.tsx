@@ -4,33 +4,7 @@ import { Pill, Screen, SearchBar, SoftCard } from "../components/Ui";
 import { useAppContext } from "../context/AppContext";
 import { radius, spacing } from "../theme/tokens";
 import { placeLineText, placeText } from "../utils/placeNames";
-
-const buildBounds = (points: Array<[number, number]>) => {
-  if (points.length === 0) {
-    return {
-      minLng: 135.65,
-      minLat: 34.98,
-      maxLng: 135.8,
-      maxLat: 35.05,
-    };
-  }
-
-  const lats = points.map((point) => point[0]);
-  const lngs = points.map((point) => point[1]);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const latPad = Math.max((maxLat - minLat) * 0.35, 0.03);
-  const lngPad = Math.max((maxLng - minLng) * 0.35, 0.03);
-
-  return {
-    minLng: minLng - lngPad,
-    minLat: minLat - latPad,
-    maxLng: maxLng + lngPad,
-    maxLat: maxLat + latPad,
-  };
-};
+import { tripDisplayTitle } from "../utils/tripDisplay";
 
 export const MapScreen = () => {
   const { state, activeTrip, destinationsById, theme } = useAppContext();
@@ -43,17 +17,6 @@ export const MapScreen = () => {
     }))
     .filter((stop) => Boolean(stop.destination));
 
-  const routeCoordinates = useMemo(
-    () =>
-      stops.map(
-        (stop) =>
-          [
-            stop.destination.coordinates.latitude,
-            stop.destination.coordinates.longitude,
-          ] as [number, number],
-      ),
-    [stops],
-  );
   const routeDestinationIds = useMemo(() => new Set(stops.map((stop) => stop.destinationId)), [stops]);
   const highlighted =
     (state.highlightedDestinationId && routeDestinationIds.has(state.highlightedDestinationId)
@@ -63,10 +26,10 @@ export const MapScreen = () => {
   const activeCityLabel = placeLineText(state.locale, activeCity);
   const totalDistance = stops.reduce((sum, stop) => sum + stop.destination.distanceKm, 0).toFixed(1);
   const totalEta = stops.reduce((sum, stop) => sum + stop.destination.etaMinutes, 0);
-  const bounds = buildBounds(routeCoordinates);
-  const markerLat = highlighted?.coordinates.latitude ?? routeCoordinates[0]?.[0] ?? 35.0116;
-  const markerLng = highlighted?.coordinates.longitude ?? routeCoordinates[0]?.[1] ?? 135.7681;
-  const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bounds.minLng}%2C${bounds.minLat}%2C${bounds.maxLng}%2C${bounds.maxLat}&layer=mapnik&marker=${markerLat}%2C${markerLng}`;
+  const markerLat = highlighted?.coordinates.latitude ?? stops[0]?.destination.coordinates.latitude ?? 35.0116;
+  const markerLng = highlighted?.coordinates.longitude ?? stops[0]?.destination.coordinates.longitude ?? 135.7681;
+  const markerName = encodeURIComponent(highlighted ? placeText(state.locale, highlighted.title) : activeCityLabel);
+  const embedUrl = `https://maps.google.com/maps?q=${markerLat},${markerLng}(${markerName})&z=13&output=embed`;
 
   if (!highlighted || stops.length === 0) {
     return (
@@ -94,16 +57,16 @@ export const MapScreen = () => {
         </View>
 
         <View style={[styles.tripHeader, { backgroundColor: theme.colors.badge, borderColor: theme.colors.border }]}>
-          <Text style={styles.tripHeaderKicker}>{zh ? "\u5f53\u524d\u884c\u7a0b\u5730\u56fe" : "CURRENT TRIP MAP"}</Text>
+          <Text style={styles.tripHeaderKicker}>{zh ? "GOOGLE \u5730\u56fe\u8def\u7ebf" : "GOOGLE MAP ROUTE"}</Text>
           <Text style={styles.tripHeaderTitle}>{activeCityLabel}</Text>
           <Text style={styles.tripHeaderMeta}>
-            {placeText(state.locale, activeTrip.title)}  {stops.length} {zh ? "\u4e2a\u57ce\u5e02\u5185\u666f\u70b9" : "in-city stops"}
+            {tripDisplayTitle(state.locale, activeTrip)}  {stops.length} {zh ? "\u4e2a\u57ce\u5e02\u5185\u666f\u70b9" : "in-city stops"}
           </Text>
         </View>
 
         <View style={styles.mapArea}>
           <View style={[styles.mapCard, { borderColor: theme.colors.border }]}>
-            <iframe title="Eslay current trip map" src={embedUrl} style={styles.iframe} />
+            <iframe title="Eslay Google current trip map" src={embedUrl} style={styles.iframe} />
             <View style={styles.fullscreenBadge}>
               <Text style={styles.fullscreenBadgeText}>
                 {activeCityLabel}  {stops.length} {zh ? "\u4e2a\u666f\u70b9" : "stops"}
