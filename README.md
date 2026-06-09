@@ -1,6 +1,6 @@
 # Eslay Travel Mobile App
 
-Eslay is a frontend-focused mobile travel planner implemented from the supplied SRS. The app is structured around four primary modules:
+Eslay is a frontend-focused mobile travel planner implemented from the supplied SRS. (The name Eslay is an original brand word combined with Escape and Lay.It means escape from trivial daily life, wander toward the distance, and lay your heart in the journey.)The app is structured around four primary modules:
 
 - `F1` Onboarding & authentication with OTP and mock Apple/Google login
 - `F2` Discovery feed with adaptive recommendation weights
