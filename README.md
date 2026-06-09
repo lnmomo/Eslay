@@ -39,3 +39,6 @@ Eslay is a frontend-focused mobile travel planner implemented from the supplied 
 
 - The project uses mock destination and itinerary data to match the SRS requirement for a frontend-first build.
 - If you want a production-grade map SDK, the next step is replacing the visual mock map in `src/screens/MapScreen.tsx` with Google Maps or Mapbox.
+
+## Android Beta Version
+- https://expo.dev/artifacts/eas/sYPJw3SU5kQYkbLRaYD3Tq.apk
