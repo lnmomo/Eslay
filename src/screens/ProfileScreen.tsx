@@ -203,7 +203,7 @@ const SettingRow = ({
 };
 
 export const ProfileScreen = () => {
-  const { state, theme } = useAppContext();
+  const { state, theme, allTags } = useAppContext();
   const [activeService, setActiveService] = useState<ProfileService | null>(null);
   const profileOptions = ["account", "preferences", "system"] as const;
   const zh = state.locale === "zh";
@@ -274,17 +274,63 @@ export const ProfileScreen = () => {
           <View style={[styles.stack, styles.innerPad]}>
             <SoftCard>
               <Text style={[styles.heading, { color: theme.colors.text }]}>{t(state.locale, "interests")}</Text>
+              <Text style={[styles.body, { color: theme.colors.subtext }]}>
+                {zh
+                  ? "点击标签即可添加或取消偏好，修改会立即影响首页、心情行程和 DIY 推荐排序。"
+                  : "Tap tags to add or remove interests. Changes immediately affect Home, mood trips, and DIY ranking."}
+              </Text>
               <View style={styles.inlinePills}>
-                {state.selectedTags.map((tag) => (
-                  <Pill key={tag} label={tagText(state.locale, tag)} selected />
+                {allTags.map((tag) => (
+                  <Pill
+                    key={tag}
+                    label={tagText(state.locale, tag)}
+                    selected={state.selectedTags.includes(tag)}
+                    onPress={() => state.actions.toggleTag(tag)}
+                  />
                 ))}
               </View>
             </SoftCard>
-            <SettingRow
-              label={t(state.locale, "budgetLevel")}
-              value={state.locale === "zh" ? `${state.budgetLevel} \u7ea7` : `Level ${state.budgetLevel}`}
-              onPress={() => state.actions.setBudgetLevel((state.budgetLevel % 5 + 1) as 1 | 2 | 3 | 4 | 5)}
-            />
+            <SoftCard>
+              <View style={styles.preferenceHeadingRow}>
+                <Text style={[styles.heading, { color: theme.colors.text }]}>{t(state.locale, "budgetLevel")}</Text>
+                <Text style={[styles.budgetValue, { color: theme.colors.accent }]}>
+                  {zh ? `${state.budgetLevel} 级` : `Level ${state.budgetLevel}`}
+                </Text>
+              </View>
+              <View style={styles.budgetRow}>
+                {[1, 2, 3, 4, 5].map((level) => {
+                  const active = state.budgetLevel === level;
+                  return (
+                    <Pressable
+                      key={level}
+                      onPress={() => state.actions.setBudgetLevel(level as 1 | 2 | 3 | 4 | 5)}
+                      style={[
+                        styles.budgetStep,
+                        {
+                          backgroundColor: active ? theme.colors.accent : theme.colors.surfaceAlt,
+                          borderColor: active ? theme.colors.accent : theme.colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.budgetStepText, { color: active ? "#FFF7EC" : theme.colors.text }]}>{level}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={[styles.budgetExplanation, { color: theme.colors.subtext }]}>
+                {zh
+                  ? state.budgetLevel <= 2
+                    ? "优先推荐高性价比目的地，并降低高消费地点的排序。数字越大，可接受的旅行预算越多。"
+                    : state.budgetLevel === 3
+                      ? "优先推荐价格与体验较均衡的目的地。数字越大，可接受的旅行预算越多。"
+                      : "优先推荐高端度假、品质住宿和高消费体验。数字越大，可接受的旅行预算越多。"
+                  : state.budgetLevel <= 2
+                    ? "Prioritizes value destinations and lowers expensive options. A higher number means a larger travel budget."
+                    : state.budgetLevel === 3
+                      ? "Prioritizes destinations with a balanced price and experience. A higher number means a larger travel budget."
+                      : "Prioritizes premium stays and higher-end experiences. A higher number means a larger travel budget."}
+              </Text>
+            </SoftCard>
             <SettingRow
               label={t(state.locale, "dietaryRequirement")}
               value={textFor(state.locale, state.dietaryMode)}
@@ -445,6 +491,19 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.xs,
   },
+  preferenceHeadingRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.sm },
+  budgetValue: { fontSize: 13, fontWeight: "900" },
+  budgetRow: { marginTop: spacing.md, flexDirection: "row", gap: spacing.xs },
+  budgetStep: {
+    flex: 1,
+    minHeight: 46,
+    borderWidth: 1,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  budgetStepText: { fontSize: 14, fontWeight: "900" },
+  budgetExplanation: { marginTop: spacing.sm, fontSize: 12, lineHeight: 18, fontWeight: "700" },
   supportLinks: {
     marginTop: spacing.md,
     gap: spacing.sm,

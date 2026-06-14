@@ -11,13 +11,14 @@ const priceToLevel = (priceLevel: string) => Math.max(1, Math.min(priceLevel.len
 
 const budgetScore = (destination: Destination, budgetLevel: RecommendationProfile["budgetLevel"]) => {
   const priceLevel = priceToLevel(destination.priceLevel);
-  const distance = Math.abs(priceLevel - budgetLevel);
-  const fitBoost = Math.max(0, 7 - distance * 2.2);
-  const tooExpensivePenalty = priceLevel > budgetLevel ? (priceLevel - budgetLevel) * -4 : 0;
-  const underBudgetPenalty = budgetLevel >= 4 && priceLevel <= 1 ? -3 : 0;
-  const premiumBoost = budgetLevel >= 4 && priceLevel >= 3 ? 3.5 : 0;
-  const valueBoost = budgetLevel <= 2 && priceLevel <= 2 ? 2.5 : 0;
-  return fitBoost + tooExpensivePenalty + underBudgetPenalty + premiumBoost + valueBoost;
+  const targetPrice = ({ 1: 1, 2: 1, 3: 2, 4: 3, 5: 3 } as const)[budgetLevel];
+  const distance = Math.abs(priceLevel - targetPrice);
+  const exactFit = distance === 0 ? 15 : distance === 1 ? 3 : -8;
+  const overBudgetPenalty = priceLevel > targetPrice ? (priceLevel - targetPrice) * -14 : 0;
+  const premiumBoost = budgetLevel >= 4 && priceLevel === 3 ? 8 + (budgetLevel - 4) * 3 : 0;
+  const valueBoost = budgetLevel <= 2 && priceLevel === 1 ? 9 + (2 - budgetLevel) * 3 : 0;
+  const balancedBoost = budgetLevel === 3 && priceLevel === 2 ? 7 : 0;
+  return exactFit + overBudgetPenalty + premiumBoost + valueBoost + balancedBoost;
 };
 
 const dietaryScore = (destination: Destination, dietaryMode: RecommendationProfile["dietaryMode"]) => {

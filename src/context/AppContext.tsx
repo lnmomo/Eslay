@@ -16,6 +16,7 @@ import { createTheme } from "../theme/tokens";
 import { placeText } from "../utils/placeNames";
 import { scoreDestination } from "../utils/recommendations";
 import { loadPersistedState, savePersistedState } from "../utils/storage";
+import { buildBalancedStopSlots } from "../utils/itineraryDistribution";
 
 type AppActions = {
   setActiveTab: (tab: AppTab) => void;
@@ -38,6 +39,9 @@ type AppActions = {
   moveStop: (tripId: string, stopId: string, direction: "up" | "down") => void;
   deleteStop: (tripId: string, stopId: string) => void;
   deleteTrip: (tripId: string) => void;
+  completeTrip: (tripId: string) => void;
+  addTripMemoryPhotos: (tripId: string, photoUris: string[]) => void;
+  removeTripMemoryPhoto: (tripId: string, photoUri: string) => void;
   setRearrangeDay: (day: number | null) => void;
   toggleTheme: () => void;
   setLocale: (locale: Locale) => void;
@@ -469,6 +473,59 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
             rearrangeDay: null,
           };
         }),
+      completeTrip: (tripId) =>
+        setState((current) => {
+          const archivedTrips = current.trips.map((trip) =>
+            trip.id === tripId ? { ...trip, status: "Past" as const } : trip,
+          );
+          const nextCurrentTrip = archivedTrips.find((trip) => trip.status !== "Past");
+          const emptyTrip: Trip | null = nextCurrentTrip
+            ? null
+            : {
+                id: `trip-empty-${Date.now()}`,
+                title: current.locale === "zh" ? "新的空行程" : "New empty itinerary",
+                dateRange: current.locale === "zh" ? "待规划" : "To be planned",
+                coverImage:
+                  current.destinations[0]?.image ??
+                  "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
+                location: current.locale === "zh" ? "未选择目的地" : "No destination selected",
+                status: "Draft",
+                travelerNote:
+                  current.locale === "zh"
+                    ? "已完成的行程已归档。你可以从首页生成下一段旅程。"
+                    : "Your completed trip is archived. Generate the next journey from Discover.",
+                travelType: "Solo",
+                stops: [],
+              };
+          const activeTrip = nextCurrentTrip ?? emptyTrip;
+          return {
+            ...current,
+            trips: emptyTrip ? [emptyTrip, ...archivedTrips] : archivedTrips,
+            activeTripId: activeTrip?.id ?? current.activeTripId,
+            highlightedDestinationId: activeTrip?.stops[0]?.destinationId ?? null,
+            savedView: "history",
+            activeTab: "saved",
+            rearrangeDay: null,
+          };
+        }),
+      addTripMemoryPhotos: (tripId, photoUris) =>
+        setState((current) => ({
+          ...current,
+          trips: current.trips.map((trip) =>
+            trip.id === tripId
+              ? { ...trip, memoryPhotos: [...(trip.memoryPhotos ?? []), ...photoUris] }
+              : trip,
+            ),
+        })),
+      removeTripMemoryPhoto: (tripId, photoUri) =>
+        setState((current) => ({
+          ...current,
+          trips: current.trips.map((trip) =>
+            trip.id === tripId
+              ? { ...trip, memoryPhotos: (trip.memoryPhotos ?? []).filter((uri) => uri !== photoUri) }
+              : trip,
+          ),
+        })),
       setRearrangeDay: (day) => setState((current) => ({ ...current, rearrangeDay: day })),
       toggleTheme: () =>
         setState((current) => ({
@@ -640,6 +697,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
               : [anchor]
             : fallback;
           const routeDestinations = anchor ? generatedDestinations : fallback;
+          const stopSlots = buildBalancedStopSlots(routeDestinations.length, durationDays);
           const trip: Trip = {
             id: tripId,
             title:
@@ -657,27 +715,34 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
               current.locale === "zh"
                 ? "根据你的心情自动生成的景点路线，可继续在行程页调整顺序。"
                 : "Generated from your mood and ready to refine in the itinerary timeline.",
+            durationDays,
             travelType: "Solo",
-            stops: routeDestinations.map((destination, index) => ({
+            stops: routeDestinations.map((destination, index) => {
+              const slot = stopSlots[index] ?? { day: 1, position: index, daySize: routeDestinations.length };
+              const isFirstStop = slot.position === 0;
+              const isLastStop = slot.position === slot.daySize - 1;
+              const timeOptions = ["09:00", "11:30", "14:30", "17:30", "19:30"];
+              return {
               id: `${tripId}-stop-${index + 1}`,
               destinationId: destination.id,
-              day: Math.floor(index / stopsPerDay) + 1,
-              time: ["09:00", "11:30", "14:30", "17:30"][index % stopsPerDay] ?? "10:00",
+              day: slot.day,
+              time: timeOptions[slot.position] ?? "20:30",
               note:
-                index % stopsPerDay === stopsPerDay - 1
+                isLastStop
                   ? current.locale === "zh"
                     ? `\u53ef\u9009\u53bb\uff1a\u5982\u679c\u5f53\u5929\u65f6\u95f4\u6216\u4f53\u529b\u5145\u8db3\uff0c\u53ef\u4ee5\u52a0\u5165\u8fd9\u4e00\u7ad9\u3002\u4e0a\u4e00\u7ad9\u8ddd\u79bb\u7ea6 ${destination.distanceKm.toFixed(1)} km\u3002`
                     : `Optional stop: add it if time and energy allow. About ${destination.distanceKm.toFixed(1)} km from the previous stop.`
                   : current.locale === "zh"
-                    ? index % stopsPerDay === 0
+                    ? isFirstStop
                       ? "\u5f53\u5929\u7b2c\u4e00\u7ad9\uff0c\u4ece\u771f\u5b9e\u666f\u70b9\u5e93\u4e2d\u5339\u914d\u3002"
                       : `\u771f\u5b9e\u666f\u70b9\u63a8\u8350\u3002\u4e0a\u4e00\u7ad9\u5230\u8fd9\u91cc\u7ea6 ${destination.distanceKm.toFixed(1)} km\uff0c\u9884\u8ba1 ${destination.etaMinutes} \u5206\u949f\u3002`
-                    : index % stopsPerDay === 0
+                    : isFirstStop
                       ? "First stop of the day, matched from the real attraction library."
                       : `Real attraction recommendation. About ${destination.distanceKm.toFixed(1)} km and ${destination.etaMinutes} min from the previous stop.`,
               type: index === 1 ? "food" : "activity",
-              status: index % stopsPerDay === stopsPerDay - 1 ? "Planned" : index % stopsPerDay < 2 ? "Confirmed" : "Planned",
-            })),
+              status: isLastStop ? "Planned" : slot.position < 2 ? "Confirmed" : "Planned",
+            };
+            }),
           };
           return {
             ...current,

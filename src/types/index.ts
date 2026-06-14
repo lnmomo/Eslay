@@ -74,6 +74,8 @@ export type Trip = {
   location: string;
   status: "Upcoming" | "Past" | "Draft";
   travelerNote: string;
+  durationDays?: number;
+  memoryPhotos?: string[];
   travelType?: "Family" | "Solo" | "Couple" | "Work";
   stops: ItineraryStop[];
 };

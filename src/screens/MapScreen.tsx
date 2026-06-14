@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
-import { Pill, Screen, SearchBar, SoftCard } from "../components/Ui";
+import { Pill, Screen, SoftCard } from "../components/Ui";
 import { useAppContext } from "../context/AppContext";
 import { radius, spacing } from "../theme/tokens";
 import { placeLineText, placeText } from "../utils/placeNames";
@@ -79,14 +79,6 @@ export const MapScreen = () => {
   return (
     <Screen flush>
       <View style={[styles.mapShell, { backgroundColor: theme.colors.surfaceAlt }]}>
-        <View style={styles.floatingSearch}>
-          <SearchBar
-            value={state.searchQuery}
-            onChangeText={state.actions.setSearchQuery}
-            placeholder={zh ? "\u641c\u7d22\u5f53\u524d\u884c\u7a0b\u666f\u70b9" : "Search current itinerary stops"}
-          />
-        </View>
-
         <View style={[styles.tripHeader, { backgroundColor: theme.colors.badge, borderColor: theme.colors.border }]}>
           <Text style={styles.tripHeaderKicker}>{zh ? "\u5f53\u524d\u884c\u7a0b\u5730\u56fe" : "CURRENT TRIP MAP"}</Text>
           <Text style={styles.tripHeaderTitle}>{activeCityLabel}</Text>
@@ -227,9 +219,6 @@ const styles = StyleSheet.create({
   mapShell: {
     minHeight: 760,
     paddingTop: spacing.md,
-  },
-  floatingSearch: {
-    marginHorizontal: spacing.md,
   },
   tripHeader: {
     marginTop: spacing.sm,

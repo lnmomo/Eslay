@@ -10,6 +10,7 @@ import { Destination, DiscoveryFilter } from "../types";
 import { filterDestinationsByFilters, sortDestinations } from "../utils/recommendations";
 import { filterText, t, tagText, textFor } from "../utils/i18n";
 import { placeText } from "../utils/placeNames";
+import { buildBalancedStopSlots } from "../utils/itineraryDistribution";
 
 type PlanningMode = "mood" | "diy";
 type BusinessService = "flights" | "hotels" | "attractions" | "food" | "guides";
@@ -434,7 +435,9 @@ const buildCityPreviewStops = (destination: Destination | undefined, durationDay
   const stopsPerDay = 4;
   const count = durationDays * stopsPerDay;
   const pois = getRealCityPois(destination.city).slice(0, count);
+  const slots = buildBalancedStopSlots(pois.length, durationDays);
   return pois.map((poi, index) => {
+    const slot = slots[index] ?? { day: 1, position: index, daySize: pois.length };
     const previous = index === 0 ? destination.coordinates : pois[index - 1];
     const distance = previewDistanceKm(
       { latitude: previous.latitude, longitude: previous.longitude },
@@ -445,8 +448,9 @@ const buildCityPreviewStops = (destination: Destination | undefined, durationDay
       title: poi.title,
       image: getPoiImage(poi.title, destination.city, destination.image),
       address: poi.address,
-      transfer: index % stopsPerDay === 0 ? "" : `${distance.toFixed(1)} km \u00b7 ${Math.max(8, Math.round(distance * 7))} min`,
-      optional: index % stopsPerDay === stopsPerDay - 1,
+      day: slot.day,
+      transfer: slot.position === 0 ? "" : `${distance.toFixed(1)} km \u00b7 ${Math.max(8, Math.round(distance * 7))} min`,
+      optional: slot.position === slot.daySize - 1,
     };
   });
 };
@@ -849,6 +853,11 @@ export const DiscoveryScreen = () => {
                       </View>
                     </PoiImageBackground>
                     <View style={{ flex: 1 }}>
+                      {index === 0 || cityPreviewStops[index - 1]?.day !== stop.day ? (
+                        <Text style={[styles.previewDayLabel, { color: theme.colors.accent }]}>
+                          {zh ? `\u7b2c ${stop.day} \u5929` : `Day ${stop.day}`}
+                        </Text>
+                      ) : null}
                       {stop.transfer ? (
                         <Text style={[styles.transferLine, { color: theme.colors.accent }]}>
                           {zh ? `\u4e0a\u4e00\u7ad9\u5230\u8fd9\u91cc ${stop.transfer}` : `From previous stop \u00b7 ${stop.transfer}`}
@@ -1245,6 +1254,7 @@ const styles = StyleSheet.create({
   previewIndex: { fontSize: 13, fontWeight: "900" },
   previewTitle: { fontSize: 16, lineHeight: 20, fontWeight: "900", letterSpacing: -0.2 },
   previewMeta: { marginTop: 3, fontSize: 12 },
+  previewDayLabel: { marginBottom: 4, fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   transferLine: { marginBottom: 4, fontSize: 11, fontWeight: "900" },
   businessPanel: { borderWidth: 1, borderRadius: 34, padding: spacing.lg, gap: spacing.sm },
   businessPanelTitle: { fontSize: 21, fontWeight: "900", letterSpacing: -0.6 },

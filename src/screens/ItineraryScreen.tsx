@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Modal, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { PoiImageBackground } from "../components/PoiImageBackground";
 import { HeroCard, Pill, Screen, SectionTitle, SoftCard } from "../components/Ui";
 import { useAppContext } from "../context/AppContext";
@@ -33,16 +33,36 @@ export const ItineraryScreen = () => {
   const [editTimes, setEditTimes] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [selectedDay, setSelectedDay] = useState(1);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const timelineTopRef = useRef(0);
+  const dayOffsetRef = useRef<Record<number, number>>({});
   const zh = state.locale === "zh";
   const displayTitle = tripDisplayTitle(state.locale, activeTrip);
   const displayLocation = tripDisplayLocation(state.locale, activeTrip);
   const displayDateRange = tripDisplayDateRange(state.locale, activeTrip);
   const displayNote = tripDisplayNote(state.locale, activeTrip);
+  const tripDayCount = activeTrip.durationDays ?? activeTrip.stops.reduce((max, stop) => Math.max(max, stop.day), 1);
   const groupedStops = activeTrip.stops.reduce<Record<number, typeof activeTrip.stops>>((acc, stop) => {
     acc[stop.day] = [...(acc[stop.day] ?? []), stop];
     return acc;
-  }, {});
+  }, Object.fromEntries(Array.from({ length: tripDayCount }, (_, index) => [index + 1, []])));
   const dayKeys = Object.keys(groupedStops);
+  useEffect(() => {
+    setSelectedDay(1);
+    dayOffsetRef.current = {};
+  }, [activeTrip.id]);
+  const jumpToDay = (day: number) => {
+    setSelectedDay(day);
+    const dayOffset = dayOffsetRef.current[day];
+    if (dayOffset === undefined) {
+      return;
+    }
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, timelineTopRef.current + dayOffset - spacing.md),
+      animated: true,
+    });
+  };
   const shiftTime = (time: string, minutes: number) => {
     const [hourText, minuteText] = time.split(":");
     const total = (Number(hourText) || 0) * 60 + (Number(minuteText) || 0) + minutes;
@@ -73,7 +93,7 @@ export const ItineraryScreen = () => {
   };
 
   return (
-    <Screen>
+    <Screen scrollRef={scrollRef}>
       <HeroCard
         title={displayTitle}
         subtitle={`${displayLocation} \u00b7 ${displayDateRange}`}
@@ -142,7 +162,12 @@ export const ItineraryScreen = () => {
       <View style={[styles.daySelector, styles.innerPad]}>
         {dayKeys.length > 0 ? (
           dayKeys.map((dayKey) => (
-            <Pill key={dayKey} label={zh ? `\u7b2c ${dayKey} \u5929` : `Day ${dayKey}`} selected={Number(dayKey) === 1} />
+            <Pill
+              key={dayKey}
+              label={zh ? `\u7b2c ${dayKey} \u5929` : `Day ${dayKey}`}
+              selected={Number(dayKey) === selectedDay}
+              onPress={() => jumpToDay(Number(dayKey))}
+            />
           ))
         ) : (
           <Text style={[styles.emptyText, { color: theme.colors.subtext }]}>
@@ -155,12 +180,23 @@ export const ItineraryScreen = () => {
         title={copy(zh, "\u6574\u5408\u65f6\u95f4\u7ebf", "Integrated Timeline View")}
         hint={copy(zh, "\u957f\u6309\u53ef\u8c03\u6574\u987a\u5e8f", "Long press to rearrange")}
       />
-      <View style={[styles.timelineWrap, styles.innerPad]}>
+      <View
+        style={[styles.timelineWrap, styles.innerPad]}
+        onLayout={(event) => {
+          timelineTopRef.current = event.nativeEvent.layout.y;
+        }}
+      >
         {Object.entries(groupedStops).map(([dayKey, stops]) => {
           const day = Number(dayKey);
           const rearranging = state.rearrangeDay === day;
           return (
-            <View key={day} style={styles.dayWrap}>
+            <View
+              key={day}
+              style={styles.dayWrap}
+              onLayout={(event) => {
+                dayOffsetRef.current[day] = event.nativeEvent.layout.y;
+              }}
+            >
               <View style={styles.lineColumn}>
                 <View style={[styles.dayDot, { backgroundColor: theme.colors.accent }]} />
                 <View style={[styles.dayLine, { backgroundColor: theme.colors.border }]} />
@@ -188,6 +224,13 @@ export const ItineraryScreen = () => {
                 </View>
 
                 <View style={styles.cardList}>
+                  {stops.length === 0 ? (
+                    <View style={[styles.emptyDayCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                      <Text style={[styles.emptyText, { color: theme.colors.subtext }]}>
+                        {copy(zh, "\u8fd9一天暂无景点，可以从愿望清单加入。", "No stops yet. Add a saved place to this day.")}
+                      </Text>
+                    </View>
+                  ) : null}
                   {stops.map((stop) => {
                     const destination = destinationsById[stop.destinationId];
                     if (!destination) {
@@ -339,28 +382,51 @@ export const ItineraryScreen = () => {
           </Text>
         </SoftCard>
       </View>
+      {activeTrip.status !== "Past" ? (
+        <View style={styles.innerPad}>
+          <Pressable
+            onPress={() => state.actions.completeTrip(activeTrip.id)}
+            style={[styles.completeTripButton, { backgroundColor: theme.colors.accent, shadowColor: theme.colors.shadow }]}
+          >
+            <View style={styles.completeTripMark}>
+              <Text style={styles.completeTripMarkText}>✓</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.completeTripTitle}>
+                {copy(zh, "已完成所有行程", "Complete this itinerary")}
+              </Text>
+              <Text style={styles.completeTripMeta}>
+                {copy(zh, "完成后将自动加入历史行程", "Move this itinerary to trip history")}
+              </Text>
+            </View>
+            <Text style={styles.completeTripArrow}>→</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <Modal transparent visible={deleteOpen} animationType="fade" onRequestClose={() => setDeleteOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.confirmSheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <Text style={[styles.confirmTitle, { color: theme.colors.text }]}>
-              {copy(zh, "\u5220\u9664\u5f53\u524d\u884c\u7a0b\uff1f", "Delete current itinerary?")}
-            </Text>
-            <Text style={[styles.confirmBody, { color: theme.colors.subtext }]}>
-              {copy(zh, "\u5220\u9664\u540e\u4f1a\u5207\u6362\u5230\u4e0b\u4e00\u4e2a\u884c\u7a0b\uff0c\u4f46\u4e0d\u4f1a\u5220\u9664\u4f60\u6536\u85cf\u7684\u666f\u70b9\u3002", "After deletion, Eslay will switch to the next itinerary. Saved destinations will stay untouched.")}
-            </Text>
-            <View style={styles.confirmActions}>
-              <Pressable onPress={() => setDeleteOpen(false)} style={[styles.confirmButton, { borderColor: theme.colors.border }]}>
-                <Text style={[styles.confirmSecondaryText, { color: theme.colors.text }]}>{copy(zh, "\u53d6\u6d88", "Cancel")}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setDeleteOpen(false);
-                  state.actions.deleteTrip(activeTrip.id);
-                }}
-                style={[styles.confirmButton, { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger }]}
-              >
-                <Text style={styles.confirmPrimaryText}>{copy(zh, "\u786e\u8ba4\u5220\u9664", "Delete")}</Text>
-              </Pressable>
+        <View style={styles.modalPortal}>
+          <View style={[styles.modalBackdrop, Platform.OS === "web" && styles.webModalBackdrop]}>
+            <View style={[styles.confirmSheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <Text style={[styles.confirmTitle, { color: theme.colors.text }]}>
+                {copy(zh, "\u5220\u9664\u5f53\u524d\u884c\u7a0b\uff1f", "Delete current itinerary?")}
+              </Text>
+              <Text style={[styles.confirmBody, { color: theme.colors.subtext }]}>
+                {copy(zh, "\u5220\u9664\u540e\u4f1a\u5207\u6362\u5230\u4e0b\u4e00\u4e2a\u884c\u7a0b\uff0c\u4f46\u4e0d\u4f1a\u5220\u9664\u4f60\u6536\u85cf\u7684\u666f\u70b9\u3002", "After deletion, Eslay will switch to the next itinerary. Saved destinations will stay untouched.")}
+              </Text>
+              <View style={styles.confirmActions}>
+                <Pressable onPress={() => setDeleteOpen(false)} style={[styles.confirmButton, { borderColor: theme.colors.border }]}>
+                  <Text style={[styles.confirmSecondaryText, { color: theme.colors.text }]}>{copy(zh, "\u53d6\u6d88", "Cancel")}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setDeleteOpen(false);
+                    state.actions.deleteTrip(activeTrip.id);
+                  }}
+                  style={[styles.confirmButton, { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger }]}
+                >
+                  <Text style={styles.confirmPrimaryText}>{copy(zh, "\u786e\u8ba4\u5220\u9664", "Delete")}</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -398,6 +464,7 @@ const styles = StyleSheet.create({
   noticeText: { fontSize: 12, lineHeight: 17, fontWeight: "800" },
   daySelector: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   emptyText: { fontSize: 14, lineHeight: 20 },
+  emptyDayCard: { borderWidth: 1, borderRadius: radius.lg, padding: spacing.md },
   timelineWrap: { gap: spacing.lg },
   dayWrap: { flexDirection: "row", gap: spacing.md },
   lineColumn: { width: 20, alignItems: "center" },
@@ -504,13 +571,54 @@ const styles = StyleSheet.create({
   deleteChip: { borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 10 },
   deleteChipText: { fontSize: 12, fontWeight: "800" },
   supportStack: { gap: spacing.sm },
+  completeTripButton: {
+    minHeight: 86,
+    borderRadius: 28,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  completeTripMark: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 247, 236, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.28)",
+  },
+  completeTripMarkText: { color: "#FFF7EC", fontSize: 22, fontWeight: "900" },
+  completeTripTitle: { color: "#FFF7EC", fontSize: 16, lineHeight: 21, fontWeight: "900" },
+  completeTripMeta: { color: "#FFE2CC", marginTop: 3, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  completeTripArrow: { color: "#FFF7EC", fontSize: 24, fontWeight: "900" },
+  modalPortal: {
+    flex: 1,
+    alignItems: "center",
+  },
   modalBackdrop: {
     flex: 1,
+    width: "100%",
     justifyContent: "center",
     padding: spacing.lg,
     backgroundColor: "rgba(2, 12, 16, 0.42)",
   },
+  webModalBackdrop: {
+    maxWidth: 430,
+    marginVertical: 12,
+    borderRadius: 28,
+    overflow: "hidden",
+  },
   confirmSheet: {
+    width: "100%",
+    maxWidth: 360,
+    alignSelf: "center",
     borderWidth: 1,
     borderRadius: 30,
     padding: spacing.lg,

@@ -18,9 +18,11 @@ import { placeText } from "../utils/placeNames";
 export const Screen = ({
   children,
   flush,
+  scrollRef,
 }: {
   children: React.ReactNode;
   flush?: boolean;
+  scrollRef?: React.RefObject<ScrollView | null>;
 }) => {
   const { theme } = useAppContext();
   return (
@@ -29,6 +31,7 @@ export const Screen = ({
       <View pointerEvents="none" style={[styles.screenBlobTwo, { borderColor: theme.colors.border }]} />
       <View pointerEvents="none" style={[styles.screenGrid, { borderColor: theme.colors.border }]} />
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingHorizontal: flush ? 0 : spacing.md,

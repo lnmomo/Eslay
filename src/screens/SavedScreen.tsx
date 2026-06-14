@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ImageBackground, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, ImageBackground, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { PoiImageBackground } from "../components/PoiImageBackground";
 import { HeroCard, Input, Pill, Screen, SectionTitle, SegmentedControl, SoftCard } from "../components/Ui";
 import { useAppContext } from "../context/AppContext";
@@ -14,10 +14,15 @@ type Draft = {
   description: string;
 };
 
+type HistoryView = "gallery" | "summary";
+
 export const SavedScreen = () => {
   const { state, theme, destinationsById, pastTrips } = useAppContext();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingAddId, setPendingAddId] = useState<string | null>(null);
+  const [historyTripId, setHistoryTripId] = useState<string | null>(null);
+  const [historyView, setHistoryView] = useState<HistoryView>("summary");
+  const [hiddenMemoryPhotoUris, setHiddenMemoryPhotoUris] = useState<string[]>([]);
   const [draft, setDraft] = useState<Draft>({ title: "", address: "", description: "" });
   const savedOptions = ["history", "wishlists"] as const;
   const zh = state.locale === "zh";
@@ -46,10 +51,161 @@ export const SavedScreen = () => {
     setEditingId(null);
   };
   const pendingDestination = pendingAddId ? destinationsById[pendingAddId] : undefined;
-  const tripDays = (tripStops: typeof state.trips[number]["stops"]) => {
-    const maxDay = tripStops.reduce((max, stop) => Math.max(max, stop.day), 1);
+  const historyTrip = historyTripId ? state.trips.find((trip) => trip.id === historyTripId) : undefined;
+  const tripDays = (trip: typeof state.trips[number]) => {
+    const maxDay = trip.durationDays ?? trip.stops.reduce((max, stop) => Math.max(max, stop.day), 1);
     return Array.from({ length: maxDay }, (_, index) => index + 1);
   };
+
+  const openHistoryView = (tripId: string, view: HistoryView) => {
+    setHistoryTripId(tripId);
+    setHistoryView(view);
+    setHiddenMemoryPhotoUris([]);
+  };
+
+  const uploadMemoryPhotos = async () => {
+    if (!historyTrip) {
+      return;
+    }
+    try {
+      const ImagePicker = await import("expo-image-picker");
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          zh ? "需要照片权限" : "Photo permission required",
+          zh ? "请允许 Eslay 访问相册后再上传照片。" : "Allow Eslay to access your photo library before uploading.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.55,
+        base64: true,
+      });
+      const uris =
+        result.assets
+          ?.map((asset) =>
+            asset.base64
+              ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
+              : asset.uri,
+          )
+          .filter(Boolean) ?? [];
+      if (!result.canceled && uris.length > 0) {
+        state.actions.addTripMemoryPhotos(historyTrip.id, uris);
+      }
+    } catch {
+      Alert.alert(
+        zh ? "图片选择器尚未安装" : "Image picker not installed",
+        zh ? "请先运行 npx expo install expo-image-picker。" : "Run npx expo install expo-image-picker first.",
+      );
+    }
+  };
+
+  const deleteMemoryPhoto = (photoUri: string) => {
+    if (!historyTrip) {
+      return;
+    }
+    setHiddenMemoryPhotoUris((current) => [...current, photoUri]);
+    state.actions.removeTripMemoryPhoto(historyTrip.id, photoUri);
+  };
+
+  if (historyTrip) {
+    const visibleMemoryPhotos = Array.from(new Set(historyTrip.memoryPhotos ?? [])).filter(
+      (uri) => Boolean(uri) && !hiddenMemoryPhotoUris.includes(uri),
+    );
+    const groupedHistoryStops = historyTrip.stops.reduce<Record<number, typeof historyTrip.stops>>((groups, stop) => {
+      groups[stop.day] = [...(groups[stop.day] ?? []), stop];
+      return groups;
+    }, {});
+    return (
+      <Screen>
+        <Pressable
+          onPress={() => setHistoryTripId(null)}
+          style={[styles.historyBack, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+        >
+          <Text style={[styles.historyBackText, { color: theme.colors.text }]}>{zh ? "返回历史行程" : "Back to trip history"}</Text>
+        </Pressable>
+        <HeroCard
+          title={tripDisplayTitle(state.locale, historyTrip)}
+          subtitle={`${tripDisplayLocation(state.locale, historyTrip)} · ${tripDisplayDateRange(state.locale, historyTrip)}`}
+          image={historyTrip.coverImage}
+          rightBadge={historyView === "gallery" ? (zh ? "回忆相册" : "MEMORIES") : (zh ? "行程总结" : "TRIP RECAP")}
+        />
+
+        {historyView === "gallery" ? (
+          <View style={[styles.stack, styles.innerPad]}>
+            <SoftCard>
+              <Text style={[styles.heading, { color: theme.colors.text }]}>{zh ? "回忆相册" : "Memory gallery"}</Text>
+              <Text style={[styles.body, { color: theme.colors.subtext }]}>
+                {zh ? "从手机相册选择照片，为这段旅程保存真实回忆。" : "Choose photos from your device to preserve memories from this trip."}
+              </Text>
+              <Pressable onPress={uploadMemoryPhotos} style={[styles.uploadButton, { backgroundColor: theme.colors.accent }]}>
+                <Text style={styles.uploadButtonText}>{zh ? "上传旅行照片" : "Upload trip photos"}</Text>
+              </Pressable>
+            </SoftCard>
+            {visibleMemoryPhotos.length > 0 ? (
+              <View style={styles.memoryGrid}>
+                {visibleMemoryPhotos.map((uri) => (
+                  <View key={uri} style={styles.memoryTile}>
+                    <Image source={{ uri }} style={styles.memoryImage} />
+                    <Pressable
+                      onPress={() => deleteMemoryPhoto(uri)}
+                      style={styles.memoryDeleteButton}
+                    >
+                      <Text style={styles.memoryDeleteText}>{zh ? "删除" : "Delete"}</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <SoftCard>
+                <Text style={[styles.note, { color: theme.colors.subtext }]}>
+                  {zh ? "还没有上传照片。" : "No photos uploaded yet."}
+                </Text>
+              </SoftCard>
+            )}
+          </View>
+        ) : (
+          <View style={[styles.stack, styles.innerPad]}>
+            <View style={styles.summaryStats}>
+              <View style={[styles.summaryStat, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <Text style={[styles.summaryStatValue, { color: theme.colors.accent }]}>{historyTrip.durationDays ?? Object.keys(groupedHistoryStops).length}</Text>
+                <Text style={[styles.summaryStatLabel, { color: theme.colors.subtext }]}>{zh ? "旅行天数" : "Days"}</Text>
+              </View>
+              <View style={[styles.summaryStat, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <Text style={[styles.summaryStatValue, { color: theme.colors.accent }]}>{historyTrip.stops.length}</Text>
+                <Text style={[styles.summaryStatLabel, { color: theme.colors.subtext }]}>{zh ? "到访景点" : "Stops"}</Text>
+              </View>
+            </View>
+            <SoftCard>
+              <Text style={[styles.heading, { color: theme.colors.text }]}>{zh ? "旅程回顾" : "Journey recap"}</Text>
+              <Text style={[styles.body, { color: theme.colors.subtext }]}>{tripDisplayNote(state.locale, historyTrip)}</Text>
+            </SoftCard>
+            {Object.entries(groupedHistoryStops).map(([day, stops]) => (
+              <SoftCard key={day}>
+                <Text style={[styles.summaryDayTitle, { color: theme.colors.text }]}>{zh ? `第 ${day} 天` : `Day ${day}`}</Text>
+                <View style={styles.summaryStopList}>
+                  {stops.map((stop, index) => {
+                    const destination = destinationsById[stop.destinationId];
+                    return destination ? (
+                      <View key={stop.id} style={[styles.summaryStop, { borderBottomColor: theme.colors.border }]}>
+                        <Text style={[styles.summaryStopIndex, { color: theme.colors.accent }]}>{index + 1}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.summaryStopTitle, { color: theme.colors.text }]}>{placeText(state.locale, destination.title)}</Text>
+                          <Text style={[styles.summaryStopMeta, { color: theme.colors.subtext }]}>{stop.time} · {destination.address}</Text>
+                        </View>
+                      </View>
+                    ) : null;
+                  })}
+                </View>
+              </SoftCard>
+            ))}
+          </View>
+        )}
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -87,20 +243,20 @@ export const SavedScreen = () => {
                 <Text style={[styles.meta, { color: theme.colors.subtext }]}>
                   {tripDisplayLocation(state.locale, trip)}  {tripDisplayDateRange(state.locale, trip)}  {textFor(state.locale, trip.travelType ?? "Trip")}
                 </Text>
-                <View style={styles.gallery}>
-                  {trip.stops.slice(0, 3).map((stop) => (
-                    <View key={stop.id} style={[styles.galleryTile, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}>
-                      <Text style={{ color: theme.colors.text, fontWeight: "700", fontSize: 12 }}>
-                        {destinationsById[stop.destinationId] ? placeText(state.locale, destinationsById[stop.destinationId].city) : "-"}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
                 <Text style={[styles.note, { color: theme.colors.subtext }]}>{tripDisplayNote(state.locale, trip)}</Text>
                 <View style={styles.actionRow}>
-                  <Pill label={t(state.locale, "duplicateTrip")} />
-                  <Pill label={t(state.locale, "memoryGallery")} />
-                  <Pill label={t(state.locale, "routePreview")} />
+                  <Pressable
+                    onPress={() => openHistoryView(trip.id, "gallery")}
+                    style={[styles.historyAction, { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border }]}
+                  >
+                    <Text style={[styles.historyActionText, { color: theme.colors.text }]}>{t(state.locale, "memoryGallery")}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => openHistoryView(trip.id, "summary")}
+                    style={[styles.historyAction, { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }]}
+                  >
+                    <Text style={styles.historyActionPrimaryText}>{t(state.locale, "routePreview")}</Text>
+                  </Pressable>
                 </View>
               </SoftCard>
             ))}
@@ -260,7 +416,7 @@ export const SavedScreen = () => {
                     {zh ? "\u9009\u62e9\u52a0\u5165\u7684\u5929\u6570" : "Choose target day"}
                   </Text>
                   <View style={styles.dayChoiceRow}>
-                    {tripDays(trip.stops).map((day) => (
+                    {tripDays(trip).map((day) => (
                       <Pressable
                         key={day}
                         onPress={() => {
@@ -333,6 +489,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
   },
+  heading: { fontSize: 17, lineHeight: 22, fontWeight: "900" },
+  body: { marginTop: 7, fontSize: 13, lineHeight: 20 },
   meta: {
     marginTop: 4,
     fontSize: 13,
@@ -366,6 +524,60 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.xs,
   },
+  historyAction: {
+    flex: 1,
+    minWidth: 120,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  historyActionText: { fontSize: 13, fontWeight: "900" },
+  historyActionPrimaryText: { color: "#FFF7EC", fontSize: 13, fontWeight: "900" },
+  historyBack: {
+    marginHorizontal: spacing.md,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
+  historyBackText: { fontSize: 12, fontWeight: "900" },
+  uploadButton: {
+    marginTop: spacing.md,
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  uploadButtonText: { color: "#FFF7EC", fontSize: 13, fontWeight: "900" },
+  memoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  memoryTile: { width: "48%", aspectRatio: 1, position: "relative" },
+  memoryImage: { width: "100%", height: "100%", borderRadius: 22, backgroundColor: "#DDE8E7" },
+  memoryDeleteButton: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "rgba(25, 31, 33, 0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    zIndex: 4,
+    elevation: 4,
+  },
+  memoryDeleteText: { color: "#FFF7EC", fontSize: 10, fontWeight: "900" },
+  summaryStats: { flexDirection: "row", gap: spacing.sm },
+  summaryStat: { flex: 1, borderWidth: 1, borderRadius: 24, padding: spacing.md },
+  summaryStatValue: { fontSize: 30, lineHeight: 34, fontWeight: "900" },
+  summaryStatLabel: { marginTop: 3, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
+  summaryDayTitle: { fontSize: 20, lineHeight: 25, fontWeight: "900" },
+  summaryStopList: { marginTop: spacing.sm },
+  summaryStop: { flexDirection: "row", gap: spacing.sm, paddingVertical: 12, borderBottomWidth: 1 },
+  summaryStopIndex: { width: 22, fontSize: 13, fontWeight: "900" },
+  summaryStopTitle: { fontSize: 14, fontWeight: "900" },
+  summaryStopMeta: { marginTop: 3, fontSize: 11, lineHeight: 16 },
   managerPanel: {
     borderWidth: 1,
     borderRadius: 32,
