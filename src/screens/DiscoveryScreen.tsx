@@ -607,11 +607,7 @@ export const DiscoveryScreen = () => {
     <Screen>
       <HeroCard
         title={zh ? cn.heroTitle : "How do you want to build this trip?"}
-        subtitle={
-          zh
-            ? cn.heroSub
-            : "Choose a mood, then pick the city, departure date, and trip length. Or enter DIY mode to build with detailed filters."
-        }
+        subtitle=""
         image={(planningMode === "mood" ? selectedDestination?.image : diyDestinations[0]?.image) ?? ranked[0].image}
         rightBadge={planningMode === "mood" ? (zh ? cn.moodMode : "Mood builder") : (zh ? cn.diyMode : "DIY planner")}
       />
@@ -634,9 +630,6 @@ export const DiscoveryScreen = () => {
           <Text style={[styles.modeTitle, { color: planningMode === "mood" ? "#FFF7EC" : theme.colors.text }]}>
             {zh ? cn.moodMode : "Generate by mood"}
           </Text>
-          <Text style={[styles.modeSub, { color: planningMode === "mood" ? "#FFE5D3" : theme.colors.subtext }]}>
-            {zh ? cn.moodSub : "Pick city, date, and duration"}
-          </Text>
         </Pressable>
         <Pressable
           onPress={() => setPlanningMode("diy")}
@@ -653,9 +646,6 @@ export const DiscoveryScreen = () => {
           <Text style={[styles.modeTitle, { color: planningMode === "diy" ? "#FFF7EC" : theme.colors.text }]}>
             {zh ? cn.diyMode : "DIY itinerary"}
           </Text>
-          <Text style={[styles.modeSub, { color: planningMode === "diy" ? "#FFE5D3" : theme.colors.subtext }]}>
-            {zh ? cn.diySub : "Search and use detailed filters"}
-          </Text>
         </Pressable>
       </View>
 
@@ -666,11 +656,6 @@ export const DiscoveryScreen = () => {
             <View style={styles.signalCopy}>
               <Text style={styles.signalEyebrow}>{zh ? cn.preferencePilot : "PREFERENCE PILOT"}</Text>
               <Text style={styles.signalTitle}>{zh ? cn.moodAtlas : "Mood atlas is listening"}</Text>
-              <Text style={styles.signalMeta}>
-                {zh
-                  ? `AI \u5c06\u9884\u7b97\u3001\u996e\u98df\u548c\u504f\u597d\u8f6c\u6210\u57ce\u5e02\u4fe1\u53f7`
-                  : "AI turns budget, diet, and taste into city signals"}
-              </Text>
             </View>
             <View style={styles.signalStats}>
               <Text style={styles.signalStatValue}>{state.budgetLevel}</Text>
@@ -1009,7 +994,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 31,
     padding: spacing.lg,
-    minHeight: 152,
+    minHeight: 118,
     justifyContent: "space-between",
     overflow: "hidden",
     position: "relative",
@@ -1026,7 +1011,6 @@ const styles = StyleSheet.create({
   },
   modeKicker: { fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
   modeTitle: { fontSize: 22, lineHeight: 25, fontWeight: "900", letterSpacing: -0.9 },
-  modeSub: { fontSize: 12, lineHeight: 17, fontWeight: "800" },
   signalDeck: {
     borderWidth: 1,
     borderRadius: 40,
@@ -1055,7 +1039,6 @@ const styles = StyleSheet.create({
   signalCopy: { flex: 1, gap: 6 },
   signalEyebrow: { color: "#FFB98E", fontSize: 10, fontWeight: "900", letterSpacing: 1.6 },
   signalTitle: { color: "#FFF7EC", fontSize: 29, lineHeight: 31, fontWeight: "900", letterSpacing: -1.2 },
-  signalMeta: { color: "#FFD9C2", fontSize: 12, lineHeight: 17, fontWeight: "700" },
   signalStats: {
     width: 76,
     height: 76,

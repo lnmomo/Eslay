@@ -109,7 +109,7 @@ export const HeroCard = ({
           <Text style={styles.heroCoordinateText}>LIVE ROUTE / POI RADAR</Text>
         </View>
         <Text style={styles.heroTitle}>{title}</Text>
-        <Text style={styles.heroSubtitle}>{subtitle}</Text>
+        {subtitle ? <Text style={styles.heroSubtitle}>{subtitle}</Text> : null}
       </View>
     </View>
   );

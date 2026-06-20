@@ -216,7 +216,7 @@ export const ProfileScreen = () => {
     <Screen>
       <HeroCard
         title={t(state.locale, "profileHeroTitle")}
-        subtitle={t(state.locale, "profileHeroSub")}
+        subtitle=""
         image="https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1200&q=80"
         rightBadge={t(state.locale, "customization")}
       />

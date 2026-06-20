@@ -211,7 +211,7 @@ export const SavedScreen = () => {
     <Screen>
       <HeroCard
         title={t(state.locale, "savedHeroTitle")}
-        subtitle={t(state.locale, "savedHeroSub")}
+        subtitle=""
         image="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"
         rightBadge={t(state.locale, "savedTrips")}
       />
